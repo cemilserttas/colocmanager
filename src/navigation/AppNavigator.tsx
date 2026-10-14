@@ -16,20 +16,24 @@ import AuthStack from './AuthStack';
 import MainTabs from './MainTabs';
 import JoinCreateGroupScreen from '../screens/group/JoinCreateGroupScreen';
 
+import { useThemeStore, getLiquidGlassTokens } from '../store/useThemeStore';
+
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const AppNavigator: React.FC = () => {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { group, isLoading: groupLoading } = useGroup();
+  const { isDark } = useThemeStore();
+  const tokens = getLiquidGlassTokens(isDark);
 
   // Show loading screen while checking auth and group status
   if (authLoading || (isAuthenticated && groupLoading)) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={[styles.loadingContainer, { backgroundColor: tokens.bg }]}>
         <Text style={styles.logo}>🏠</Text>
-        <Text style={styles.title}>ColocManager</Text>
-        <ActivityIndicator size="large" color={theme.colors.primary} style={styles.spinner} />
-        <Text style={styles.loadingText}>Chargement...</Text>
+        <Text style={[styles.title, { color: tokens.text }]}>ColocManager</Text>
+        <ActivityIndicator size="large" color={tokens.accent} style={styles.spinner} />
+        <Text style={[styles.loadingText, { color: tokens.textSecondary }]}>Chargement...</Text>
       </View>
     );
   }
@@ -59,7 +63,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: theme.colors.background,
   },
   logo: {
     fontSize: 64,
@@ -68,7 +71,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: theme.typography.fontSizes.h1,
     fontWeight: 'bold',
-    color: theme.colors.primary,
     marginBottom: 32,
   },
   spinner: {
@@ -76,7 +78,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: theme.typography.fontSizes.body,
-    color: theme.colors.textSecondary,
   },
 });
 

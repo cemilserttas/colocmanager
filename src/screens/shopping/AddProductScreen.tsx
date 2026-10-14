@@ -11,42 +11,27 @@ import {
   Text,
   Button,
   TextInput,
-  Surface,
   Snackbar,
   Avatar,
   Divider,
 } from 'react-native-paper';
+import * as Notifications from 'expo-notifications';
 import { useAuth } from '../../hooks/useAuth';
 import { useGroup } from '../../hooks/useGroup';
 import { useShopping } from '../../hooks/useShopping';
-import { colors, spacing, borderRadius } from '../../constants/theme';
+import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
+import { useLanguageStore } from '../../store/useLanguageStore';
+import { soundService } from '../../services/soundService';
+import { notificationService } from '../../services/notificationService';
 import { GroupMember } from '../../types';
 
-/**
- * Resolves a user ID to a member display name.
- */
 const getMemberName = (uid: string, members: GroupMember[]): string => {
   const member = members.find((m) => m.userId === uid || m.id === uid);
   return member?.displayName || member?.email || 'Membre inconnu';
 };
 
 const SUGGESTED_ICONS = [
-  '🧻',
-  '🧼',
-  '☕',
-  '🧽',
-  '🥛',
-  '🍞',
-  '🍳',
-  '🧴',
-  '🗑️',
-  '🧂',
-  '🍎',
-  '🧃',
-  '🍷',
-  '🍕',
-  '🧺',
-  '🧯',
+  '🧻', '🧼', '☕', '🧽', '🥛', '🍞', '🍳', '🧴', '🗑️', '🧂', '🍎', '🧃', '🍷', '🍕', '🧺', '🧯',
 ];
 
 interface AddProductScreenProps {
@@ -55,11 +40,11 @@ interface AddProductScreenProps {
   };
 }
 
-/**
- * Screen enabling admins to add a recurring shared shopping item
- * and configure its initial buyer rotation sequence.
- */
 export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }) => {
+  const { isDark } = useThemeStore();
+  const tokens = getLiquidGlassTokens(isDark);
+  const { t } = useLanguageStore();
+
   const { user } = useAuth();
   const { group, members } = useGroup();
   const { addProduct, loading } = useShopping();
@@ -76,7 +61,6 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
     (group?.adminUid === user?.uid ||
       members.some((m) => (m.userId === user?.uid || m.id === user?.uid) && m.role === 'admin'));
 
-  // Initialize rotation order with all member user IDs
   useEffect(() => {
     if (members && members.length > 0 && rotationOrder.length === 0) {
       const uids = members.map((m) => m.userId || m.id);
@@ -84,11 +68,9 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
     }
   }, [members, rotationOrder.length]);
 
-  /**
-   * Moves a member up one rank in rotation order.
-   */
   const moveUp = (index: number) => {
     if (index <= 0) return;
+    soundService.playPopSound();
     const newOrder = [...rotationOrder];
     const temp = newOrder[index];
     newOrder[index] = newOrder[index - 1];
@@ -96,11 +78,9 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
     setRotationOrder(newOrder);
   };
 
-  /**
-   * Moves a member down one rank in rotation order.
-   */
   const moveDown = (index: number) => {
     if (index >= rotationOrder.length - 1) return;
+    soundService.playPopSound();
     const newOrder = [...rotationOrder];
     const temp = newOrder[index];
     newOrder[index] = newOrder[index + 1];
@@ -108,10 +88,8 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
     setRotationOrder(newOrder);
   };
 
-  /**
-   * Validates and submits new product creation.
-   */
   const handleAddProduct = async () => {
+    soundService.playPopSound();
     const trimmedName = name.trim();
     if (!trimmedName) {
       setErrorMessage('Veuillez saisir le nom du produit.');
@@ -134,6 +112,33 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
     setSubmitting(true);
     try {
       await addProduct(trimmedName, selectedIcon, rotationOrder);
+
+      // Notify roommates in Firestore & mobile push
+      const otherMembers = members.filter((m) => (m.userId || m.id) !== user?.uid);
+      for (const m of otherMembers) {
+        const uid = m.userId || m.id;
+        try {
+          await notificationService.addNotificationToFirestore(
+            uid,
+            'shopping',
+            '🛒 Nouveau produit ajouté !',
+            `L'administrateur a ajouté "${trimmedName}" à la liste des courses partagées.`
+          );
+        } catch {}
+      }
+
+      try {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: '🛒 Nouveau produit ajouté !',
+            body: `L'administrateur a ajouté "${trimmedName}" à la colocation.`,
+            sound: true,
+          },
+          trigger: null,
+        });
+      } catch {}
+
+      soundService.playSuccessSound();
       navigation.goBack();
     } catch (err: unknown) {
       const message =
@@ -146,15 +151,21 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
 
   if (!isAdmin) {
     return (
-      <View style={styles.unauthorizedContainer}>
+      <View style={[styles.unauthorizedContainer, { backgroundColor: tokens.bg }]}>
         <Text style={styles.lockIcon}>🔒</Text>
-        <Text variant="titleMedium" style={styles.unauthorizedTitle}>
+        <Text variant="titleMedium" style={{ fontWeight: '800', color: tokens.text }}>
           Accès réservé à l'administrateur
         </Text>
-        <Text variant="bodyMedium" style={styles.unauthorizedSubtitle}>
-          Seul l'administrateur de la colocation peut ajouter des produits partagés à la rotation.
+        <Text variant="bodyMedium" style={{ color: tokens.textSecondary, textAlign: 'center', marginTop: 6, paddingHorizontal: 24 }}>
+          Seul l'administrateur de la colocation peut ajouter de nouveaux produits à acheter.
         </Text>
-        <Button mode="contained" onPress={() => navigation.goBack()} style={{ marginTop: spacing.md }}>
+        <Button
+          mode="contained"
+          buttonColor={tokens.primary}
+          textColor="#FFFFFF"
+          onPress={() => navigation.goBack()}
+          style={{ marginTop: 16, borderRadius: 16 }}
+        >
           Retour
         </Button>
       </View>
@@ -164,21 +175,22 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.flexContainer}
+      style={[styles.flexContainer, { backgroundColor: tokens.bg }]}
     >
       <View style={styles.contentWrapper}>
-        {/* Top Bar */}
-        <View style={styles.topBar}>
+        {/* Header */}
+        <View style={[styles.topBar, { backgroundColor: tokens.surface, borderColor: tokens.border }]}>
           <Button
             mode="text"
             onPress={() => navigation.goBack()}
             style={{ margin: 0 }}
+            textColor={tokens.primary}
             labelStyle={{ fontSize: 16 }}
           >
             ← Retour
           </Button>
-          <Text variant="titleMedium" style={styles.screenTitle}>
-            Nouveau Produit
+          <Text variant="titleMedium" style={{ fontWeight: '800', color: tokens.text }}>
+            {t('addProductTitle')}
           </Text>
           <View style={{ width: 60 }} />
         </View>
@@ -189,24 +201,27 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
           showsVerticalScrollIndicator={false}
         >
           {/* Name Input */}
-          <Surface style={styles.cardSection}>
-            <Text variant="titleSmall" style={styles.sectionLabel}>
-              Nom de l'article partagé
+          <View style={[styles.cardSection, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <Text variant="titleSmall" style={[styles.sectionLabel, { color: tokens.text }]}>
+              {t('productNameLabel')}
             </Text>
             <TextInput
-              placeholder="Ex: Papier toilette, Lessive, Liquide vaisselle..."
+              placeholder={t('productNamePlaceholder')}
               value={name}
               onChangeText={setName}
               mode="outlined"
-              style={styles.input}
+              style={{ backgroundColor: 'transparent' }}
+              textColor={tokens.text}
+              outlineColor={tokens.borderSubtle}
+              activeOutlineColor={tokens.primary}
               disabled={submitting}
             />
-          </Surface>
+          </View>
 
           {/* Icon Picker */}
-          <Surface style={styles.cardSection}>
-            <Text variant="titleSmall" style={styles.sectionLabel}>
-              Icône associée : {selectedIcon}
+          <View style={[styles.cardSection, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <Text variant="titleSmall" style={[styles.sectionLabel, { color: tokens.text }]}>
+              {t('iconLabel')} {selectedIcon}
             </Text>
             <ScrollView
               horizontal
@@ -218,23 +233,34 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
                 return (
                   <TouchableOpacity
                     key={`icon-${icon}`}
-                    onPress={() => setSelectedIcon(icon)}
-                    style={[styles.iconChip, isSelected && styles.selectedIconChip]}
+                    onPress={() => {
+                      soundService.playPopSound();
+                      setSelectedIcon(icon);
+                    }}
+                    style={[
+                      styles.iconChip,
+                      {
+                        backgroundColor: isSelected
+                          ? (isDark ? 'rgba(10, 132, 255, 0.25)' : 'rgba(10, 132, 255, 0.12)')
+                          : (isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)'),
+                        borderColor: isSelected ? tokens.primary : tokens.border,
+                      },
+                    ]}
                   >
                     <Text style={styles.iconEmoji}>{icon}</Text>
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
-          </Surface>
+          </View>
 
           {/* Rotation Order Section */}
-          <Surface style={styles.cardSection}>
-            <Text variant="titleSmall" style={styles.sectionLabel}>
-              Ordre de passage ({rotationOrder.length} colocataires)
+          <View style={[styles.cardSection, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <Text variant="titleSmall" style={[styles.sectionLabel, { color: tokens.text }]}>
+              {t('rotationOrder')} ({rotationOrder.length})
             </Text>
-            <Text variant="bodySmall" style={styles.sectionSubtitle}>
-              Le colocataire #1 achètera en premier. Ajustez avec les boutons ▲ et ▼ :
+            <Text variant="bodySmall" style={{ color: tokens.textSecondary, marginBottom: 12 }}>
+              {t('rotationOrderSub')}
             </Text>
 
             <View style={styles.rotationList}>
@@ -247,7 +273,7 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
                   <React.Fragment key={`add-rot-${uid}`}>
                     <View style={styles.memberRow}>
                       <View style={styles.orderBadge}>
-                        <Text variant="labelLarge" style={styles.orderBadgeText}>
+                        <Text variant="labelLarge" style={{ fontWeight: '800', color: tokens.primary }}>
                           {index + 1}
                         </Text>
                       </View>
@@ -255,10 +281,10 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
                       <Avatar.Text
                         size={34}
                         label={memberName.charAt(0).toUpperCase()}
-                        style={styles.memberAvatar}
+                        style={{ backgroundColor: tokens.primary, marginRight: 10, marginLeft: 4 }}
                       />
 
-                      <Text variant="bodyMedium" style={styles.memberName} numberOfLines={1}>
+                      <Text variant="bodyMedium" style={{ flex: 1, fontWeight: '700', color: tokens.text }} numberOfLines={1}>
                         {memberName}
                       </Text>
 
@@ -266,6 +292,7 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
                         <Button
                           mode="text"
                           compact
+                          textColor={tokens.primary}
                           disabled={isFirst || submitting}
                           onPress={() => moveUp(index)}
                         >
@@ -274,6 +301,7 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
                         <Button
                           mode="text"
                           compact
+                          textColor={tokens.primary}
                           disabled={isLast || submitting}
                           onPress={() => moveDown(index)}
                         >
@@ -281,24 +309,26 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
                         </Button>
                       </View>
                     </View>
-                    {index < rotationOrder.length - 1 && <Divider />}
+                    {index < rotationOrder.length - 1 && <Divider style={{ backgroundColor: tokens.borderSubtle }} />}
                   </React.Fragment>
                 );
               })}
             </View>
-          </Surface>
+          </View>
 
           {/* Submit Button */}
           <Button
             mode="contained"
-            buttonColor={colors.primary}
+            buttonColor={tokens.primary}
+            textColor="#FFFFFF"
             onPress={handleAddProduct}
             loading={submitting || loading}
             disabled={submitting || loading}
             style={styles.submitButton}
-            contentStyle={styles.submitButtonContent}
+            contentStyle={{ paddingVertical: 6 }}
+            labelStyle={{ fontWeight: '800', fontSize: 15 }}
           >
-            Ajouter à la rotation
+            {t('addRotationBtn')}
           </Button>
         </ScrollView>
       </View>
@@ -311,7 +341,7 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
           setErrorMessage(null);
         }}
         duration={3500}
-        style={styles.snackbar}
+        style={{ backgroundColor: tokens.error }}
       >
         {errorMessage || ''}
       </Snackbar>
@@ -322,7 +352,6 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
 const styles = StyleSheet.create({
   flexContainer: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   contentWrapper: {
     flex: 1,
@@ -334,121 +363,68 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    elevation: 2,
-  },
-  screenTitle: {
-    fontWeight: '800',
-    color: colors.text,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   scrollContent: {
-    padding: spacing.md,
-    paddingBottom: spacing.xl * 2,
+    padding: 16,
+    paddingBottom: 110,
   },
   cardSection: {
-    backgroundColor: colors.surface,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.md,
-    elevation: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
+    padding: 18,
+    borderRadius: 24,
+    marginBottom: 16,
+    borderWidth: 1.2,
   },
   sectionLabel: {
     fontWeight: '800',
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  sectionSubtitle: {
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-    fontSize: 12,
-  },
-  input: {
-    marginTop: spacing.xs,
+    marginBottom: 6,
   },
   iconsRow: {
-    paddingVertical: spacing.xs,
-    gap: spacing.sm,
+    paddingVertical: 6,
+    gap: 8,
   },
   iconChip: {
-    padding: spacing.sm,
-    borderRadius: borderRadius.md,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
+    padding: 10,
+    borderRadius: 18,
+    borderWidth: 1.2,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 44,
-    minHeight: 44,
-  },
-  selectedIconChip: {
-    borderColor: colors.primary,
-    backgroundColor: '#EEF2FF',
+    minWidth: 46,
+    minHeight: 46,
   },
   iconEmoji: {
     fontSize: 22,
   },
   rotationList: {
-    marginTop: spacing.xs,
+    marginTop: 6,
   },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.xs,
+    paddingVertical: 8,
   },
   orderBadge: {
     width: 24,
     alignItems: 'center',
   },
-  orderBadgeText: {
-    fontWeight: '800',
-    color: colors.textSecondary,
-  },
-  memberAvatar: {
-    backgroundColor: colors.primary,
-    marginRight: spacing.sm,
-    marginLeft: spacing.xs,
-  },
-  memberName: {
-    flex: 1,
-    fontWeight: '600',
-    color: colors.text,
-  },
   orderButtons: {
     flexDirection: 'row',
   },
   submitButton: {
-    borderRadius: borderRadius.md,
-    marginTop: spacing.sm,
-  },
-  submitButtonContent: {
-    paddingVertical: spacing.xs,
+    borderRadius: 20,
+    marginTop: 8,
   },
   unauthorizedContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing.xl,
-    backgroundColor: colors.background,
+    padding: 32,
   },
   lockIcon: {
     fontSize: 54,
-    marginBottom: spacing.md,
-  },
-  unauthorizedTitle: {
-    fontWeight: '800',
-    color: colors.text,
-  },
-  unauthorizedSubtitle: {
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: spacing.xs,
-  },
-  snackbar: {
-    backgroundColor: colors.error,
+    marginBottom: 16,
   },
 });
 

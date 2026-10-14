@@ -7,7 +7,6 @@ import {
 import {
   Text,
   Button,
-  Surface,
   Dialog,
   Portal,
   Snackbar,
@@ -19,6 +18,9 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { useGroup } from '../../hooks/useGroup';
 import { useCleaning } from '../../hooks/useCleaning';
+import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
+import { useLanguageStore } from '../../store/useLanguageStore';
+import { soundService } from '../../services/soundService';
 import { colors, spacing, borderRadius } from '../../constants/theme';
 import { CleaningRecord, GroupMember } from '../../types';
 
@@ -110,6 +112,10 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
   route,
   navigation,
 }) => {
+  const { isDark } = useThemeStore();
+  const tokens = getLiquidGlassTokens(isDark);
+  const { t } = useLanguageStore();
+
   const { taskId } = route.params;
   const { user } = useAuth();
   const { group, members } = useGroup();
@@ -167,6 +173,7 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
   }, [fetchTaskHistory, taskId]);
 
   const handleOpenReorder = () => {
+    soundService.playPopSound();
     if (task) {
       setTempOrder([...(task.rotationOrder || [])]);
       setReorderDialogVisible(true);
@@ -174,6 +181,7 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
   };
 
   const moveUp = (index: number) => {
+    soundService.playPopSound();
     if (index <= 0) return;
     const newOrder = [...tempOrder];
     const item = newOrder[index];
@@ -183,6 +191,7 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
   };
 
   const moveDown = (index: number) => {
+    soundService.playPopSound();
     if (index >= tempOrder.length - 1) return;
     const newOrder = [...tempOrder];
     const item = newOrder[index];
@@ -192,6 +201,7 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
   };
 
   const handleSaveOrder = async () => {
+    soundService.playPopSound();
     if (!task || !updateTask) {
       setReorderDialogVisible(false);
       return;
@@ -200,6 +210,7 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
     try {
       await updateTask(task.id, { rotationOrder: tempOrder });
       setReorderDialogVisible(false);
+      soundService.playSuccessSound();
       setSnackbarMessage("L'ordre de rotation pour cette corvée a été mis à jour.");
       setSnackbarVisible(true);
     } catch (err: unknown) {
@@ -213,6 +224,7 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
   };
 
   const handleDeleteTask = async () => {
+    soundService.playPopSound();
     if (!task) return;
     setDeleting(true);
     try {
@@ -230,9 +242,17 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
 
   if (!task) {
     return (
-      <View style={styles.notFoundContainer}>
-        <Text variant="titleMedium">Tâche de ménage introuvable.</Text>
-        <Button mode="contained" onPress={() => navigation.goBack()} style={{ marginTop: spacing.md }}>
+      <View style={[styles.notFoundContainer, { backgroundColor: tokens.bg }]}>
+        <Text variant="titleMedium" style={{ color: tokens.text }}>Tâche de ménage introuvable.</Text>
+        <Button
+          mode="contained"
+          buttonColor={tokens.accent}
+          onPress={() => {
+            soundService.playPopSound();
+            navigation.goBack();
+          }}
+          style={{ marginTop: spacing.md, borderRadius: 20 }}
+        >
           Retour à la liste
         </Button>
       </View>
@@ -244,19 +264,22 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
   const overdue = isOverdue(task.nextDueDate);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: tokens.bg }]}>
       <View style={styles.contentWrapper}>
         {/* Top Header */}
-        <View style={styles.topBar}>
+        <View style={[styles.topBar, { backgroundColor: tokens.surface, borderBottomColor: tokens.border }]}>
           <Button
             mode="text"
-            onPress={() => navigation.goBack()}
+            onPress={() => {
+              soundService.playPopSound();
+              navigation.goBack();
+            }}
             style={{ margin: 0 }}
-            labelStyle={{ fontSize: 16 }}
+            labelStyle={{ fontSize: 16, color: tokens.accent, fontWeight: '700' }}
           >
             ← Retour
           </Button>
-          <Text variant="titleMedium" style={styles.screenTitle} numberOfLines={1}>
+          <Text variant="titleMedium" style={[styles.screenTitle, { color: tokens.text }]} numberOfLines={1}>
             {task.name}
           </Text>
           <View style={{ width: 60 }} />
@@ -264,42 +287,47 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {/* Task Overview Surface */}
-          <Surface style={styles.bannerSurface}>
-            <Text style={styles.bannerIcon}>{getAreaIcon(task.area)}</Text>
-            <Text variant="headlineSmall" style={styles.bannerName}>
+          <View style={[styles.bannerSurface, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <View style={[styles.bannerIconBubble, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)' }]}>
+              <Text style={styles.bannerIcon}>{getAreaIcon(task.area)}</Text>
+            </View>
+            <Text variant="headlineSmall" style={[styles.bannerName, { color: tokens.text }]}>
               {task.name}
             </Text>
-            <Text variant="bodyMedium" style={styles.bannerArea}>
+            <Text variant="bodyMedium" style={[styles.bannerArea, { color: tokens.textSecondary }]}>
               Zone d'entretien : {task.area}
             </Text>
 
             <View style={styles.chipsRow}>
-              <Chip style={styles.chip} textStyle={{ fontWeight: '600' }}>
+              <Chip
+                style={[styles.chip, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F1F5F9' }]}
+                textStyle={{ fontWeight: '600', color: tokens.text }}
+              >
                 🔁 {formatFrequency(task.frequency)}
               </Chip>
               <Chip
-                style={[styles.chip, overdue ? styles.overdueChip : styles.calendarChip]}
-                textStyle={overdue ? styles.overdueChipText : { fontWeight: '600' }}
+                style={[styles.chip, overdue ? { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : '#FEF2F2' } : { backgroundColor: isDark ? 'rgba(2, 132, 199, 0.2)' : '#E0F2FE' }]}
+                textStyle={overdue ? styles.overdueChipText : { fontWeight: '600', color: '#0284C7' }}
               >
                 {overdue ? '⚠️ En retard : ' : '📅 Échéance : '}
                 {formatDate(task.nextDueDate)}
               </Chip>
             </View>
-          </Surface>
+          </View>
 
           {/* Rotation Order Section */}
           <View style={styles.sectionHeaderRow}>
-            <Text variant="titleMedium" style={styles.sectionTitle}>
+            <Text variant="titleMedium" style={[styles.sectionTitle, { color: tokens.text }]}>
               Ordre de passage ({rotationList.length})
             </Text>
             {isAdmin && (
-              <Button mode="text" onPress={handleOpenReorder} style={styles.editButton}>
+              <Button mode="text" onPress={handleOpenReorder} textColor={tokens.accent} style={styles.editButton}>
                 Modifier l'ordre
               </Button>
             )}
           </View>
 
-          <Surface style={styles.rotationCard}>
+          <View style={[styles.rotationCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
             {rotationList.map((uid, index) => {
               const isCurrent = index === currentTurnIndex;
               const memberName = getMemberName(uid, members);
@@ -307,11 +335,21 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
 
               return (
                 <React.Fragment key={`clean-rot-${uid}-${index}`}>
-                  <View style={[styles.rotationRow, isCurrent && styles.activeRotationRow]}>
+                  <View
+                    style={[
+                      styles.rotationRow,
+                      isCurrent && {
+                        backgroundColor: isDark ? 'rgba(2, 132, 199, 0.16)' : 'rgba(2, 132, 199, 0.08)',
+                      },
+                    ]}
+                  >
                     <View style={styles.rotationOrderBadge}>
                       <Text
                         variant="labelLarge"
-                        style={[styles.rotationOrderNumber, isCurrent && styles.activeOrderNumber]}
+                        style={[
+                          styles.rotationOrderNumber,
+                          { color: isCurrent ? '#0284C7' : tokens.textSecondary },
+                        ]}
                       >
                         {index + 1}
                       </Text>
@@ -319,12 +357,18 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
                     <Avatar.Text
                       size={36}
                       label={memberName.charAt(0).toUpperCase()}
-                      style={[styles.memberAvatar, isCurrent && styles.activeAvatar]}
+                      style={[
+                        styles.memberAvatar,
+                        { backgroundColor: isCurrent ? '#0284C7' : tokens.accent },
+                      ]}
                     />
                     <View style={styles.memberNameContainer}>
                       <Text
                         variant="titleSmall"
-                        style={[styles.memberNameText, isCurrent && styles.activeMemberName]}
+                        style={[
+                          styles.memberNameText,
+                          { color: isCurrent ? '#0284C7' : tokens.text },
+                        ]}
                       >
                         {memberName} {isSelf ? '(Vous)' : ''}
                       </Text>
@@ -335,25 +379,25 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
                       )}
                     </View>
                   </View>
-                  {index < rotationList.length - 1 && <Divider />}
+                  {index < rotationList.length - 1 && <Divider style={{ backgroundColor: tokens.border }} />}
                 </React.Fragment>
               );
             })}
-          </Surface>
+          </View>
 
           {/* Cleaning Execution History Section */}
           <View style={styles.sectionHeaderRow}>
-            <Text variant="titleMedium" style={styles.sectionTitle}>
+            <Text variant="titleMedium" style={[styles.sectionTitle, { color: tokens.text }]}>
               Historique des nettoyages
             </Text>
           </View>
 
-          <Surface style={styles.historyCard}>
+          <View style={[styles.historyCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
             {historyLoading ? (
-              <ActivityIndicator style={styles.centered} size="small" color={colors.secondary} />
+              <ActivityIndicator style={styles.centered} size="small" color="#0284C7" />
             ) : history.length === 0 ? (
               <View style={styles.emptyHistory}>
-                <Text variant="bodyMedium" style={styles.emptyHistoryText}>
+                <Text variant="bodyMedium" style={[styles.emptyHistoryText, { color: tokens.textSecondary }]}>
                   {task.lastCleanedAt
                     ? `Dernier nettoyage effectué le ${formatDate(task.lastCleanedAt)} par ${
                         task.lastCleanedBy ? getMemberName(task.lastCleanedBy, members) : 'un coloc'
@@ -367,27 +411,30 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
                   <View style={styles.historyRow}>
                     <Text style={{ fontSize: 20, marginRight: spacing.sm }}>✅</Text>
                     <View style={styles.historyDetails}>
-                      <Text variant="bodyMedium" style={styles.historyBuyer}>
+                      <Text variant="bodyMedium" style={[styles.historyBuyer, { color: tokens.text }]}>
                         Nettoyé par {getMemberName(record.cleanerUid, members)}
                       </Text>
-                      <Text variant="bodySmall" style={styles.historyDate}>
+                      <Text variant="bodySmall" style={[styles.historyDate, { color: tokens.textSecondary }]}>
                         {formatDate(record.cleanedAt)}
                       </Text>
                     </View>
                   </View>
-                  {idx < history.length - 1 && <Divider />}
+                  {idx < history.length - 1 && <Divider style={{ backgroundColor: tokens.border }} />}
                 </React.Fragment>
               ))
             )}
-          </Surface>
+          </View>
 
           {/* Admin Delete Action */}
           {isAdmin && (
             <Button
               mode="outlined"
-              textColor={colors.error}
-              style={styles.deleteButton}
-              onPress={() => setDeleteDialogVisible(true)}
+              textColor="#EF4444"
+              style={[styles.deleteButton, { borderColor: 'rgba(239, 68, 68, 0.4)' }]}
+              onPress={() => {
+                soundService.playPopSound();
+                setDeleteDialogVisible(true);
+              }}
             >
               🗑️ Supprimer cette tâche
             </Button>
@@ -397,10 +444,14 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
 
       {/* Reorder Dialog */}
       <Portal>
-        <Dialog visible={reorderDialogVisible} onDismiss={() => setReorderDialogVisible(false)}>
-          <Dialog.Title>Modifier l'ordre de passage</Dialog.Title>
+        <Dialog
+          visible={reorderDialogVisible}
+          onDismiss={() => setReorderDialogVisible(false)}
+          style={{ backgroundColor: tokens.card, borderRadius: 24, borderWidth: 1, borderColor: tokens.border }}
+        >
+          <Dialog.Title style={{ color: tokens.text, fontWeight: '800' }}>Modifier l'ordre de passage</Dialog.Title>
           <Dialog.Content>
-            <Text variant="bodySmall" style={styles.dialogDescription}>
+            <Text variant="bodySmall" style={[styles.dialogDescription, { color: tokens.textSecondary }]}>
               Définissez l'ordre de passage des colocataires pour cette tâche :
             </Text>
             <ScrollView style={styles.dialogList}>
@@ -408,10 +459,10 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
                 const name = getMemberName(uid, members);
                 return (
                   <View key={`reorder-clean-${uid}-${idx}`} style={styles.reorderRow}>
-                    <Text variant="labelLarge" style={styles.reorderIndex}>
+                    <Text variant="labelLarge" style={[styles.reorderIndex, { color: tokens.textSecondary }]}>
                       {idx + 1}.
                     </Text>
-                    <Text variant="bodyMedium" style={styles.reorderName} numberOfLines={1}>
+                    <Text variant="bodyMedium" style={[styles.reorderName, { color: tokens.text }]} numberOfLines={1}>
                       {name}
                     </Text>
                     <View style={styles.reorderArrows}>
@@ -420,6 +471,7 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
                         compact
                         disabled={idx === 0}
                         onPress={() => moveUp(idx)}
+                        textColor={tokens.accent}
                       >
                         ▲
                       </Button>
@@ -428,6 +480,7 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
                         compact
                         disabled={idx === tempOrder.length - 1}
                         onPress={() => moveDown(idx)}
+                        textColor={tokens.accent}
                       >
                         ▼
                       </Button>
@@ -438,12 +491,13 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
             </ScrollView>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setReorderDialogVisible(false)}>Annuler</Button>
+            <Button onPress={() => setReorderDialogVisible(false)} textColor={tokens.textSecondary}>Annuler</Button>
             <Button
               mode="contained"
-              buttonColor={colors.secondary}
+              buttonColor="#0284C7"
               onPress={handleSaveOrder}
               loading={savingOrder}
+              style={{ borderRadius: 16 }}
             >
               Enregistrer
             </Button>
@@ -451,17 +505,21 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
         </Dialog>
 
         {/* Delete Confirmation Dialog */}
-        <Dialog visible={deleteDialogVisible} onDismiss={() => setDeleteDialogVisible(false)}>
-          <Dialog.Title>Supprimer la tâche</Dialog.Title>
+        <Dialog
+          visible={deleteDialogVisible}
+          onDismiss={() => setDeleteDialogVisible(false)}
+          style={{ backgroundColor: tokens.card, borderRadius: 24, borderWidth: 1, borderColor: tokens.border }}
+        >
+          <Dialog.Title style={{ color: tokens.text, fontWeight: '800' }}>Supprimer la tâche</Dialog.Title>
           <Dialog.Content>
-            <Text variant="bodyMedium">
+            <Text variant="bodyMedium" style={{ color: tokens.textSecondary }}>
               Voulez-vous vraiment supprimer définitivement la tâche "{task.name}" ?
             </Text>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setDeleteDialogVisible(false)}>Annuler</Button>
+            <Button onPress={() => setDeleteDialogVisible(false)} textColor={tokens.textSecondary}>Annuler</Button>
             <Button
-              textColor={colors.error}
+              textColor="#EF4444"
               onPress={handleDeleteTask}
               loading={deleting}
             >
@@ -490,7 +548,6 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   contentWrapper: {
     flex: 1,
@@ -510,39 +567,42 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    elevation: 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   screenTitle: {
     fontWeight: '800',
-    color: colors.text,
     flex: 1,
     textAlign: 'center',
+    fontSize: 18,
   },
   scrollContent: {
     padding: spacing.md,
-    paddingBottom: spacing.xl * 2,
+    paddingBottom: spacing.xl * 3,
   },
   bannerSurface: {
     alignItems: 'center',
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    elevation: 2,
+    borderRadius: 24,
+    borderWidth: 1,
     marginBottom: spacing.md,
   },
-  bannerIcon: {
-    fontSize: 52,
+  bannerIconBubble: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: spacing.xs,
+  },
+  bannerIcon: {
+    fontSize: 40,
   },
   bannerName: {
     fontWeight: '800',
-    color: colors.text,
     textAlign: 'center',
   },
   bannerArea: {
-    color: colors.textSecondary,
     marginTop: 2,
     marginBottom: spacing.sm,
   },
@@ -553,16 +613,10 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   chip: {
-    backgroundColor: '#F1F5F9',
-  },
-  calendarChip: {
-    backgroundColor: '#E0F2FE',
-  },
-  overdueChip: {
-    backgroundColor: '#FEF2F2',
+    borderRadius: 14,
   },
   overdueChipText: {
-    color: colors.error,
+    color: '#EF4444',
     fontWeight: '800',
   },
   sectionHeaderRow: {
@@ -575,18 +629,14 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontWeight: '800',
-    color: colors.text,
   },
   editButton: {
     margin: 0,
   },
   rotationCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    elevation: 1,
+    borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.border,
   },
   rotationRow: {
     flexDirection: 'row',
@@ -594,57 +644,37 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
   },
-  activeRotationRow: {
-    backgroundColor: '#F0F9FF',
-  },
   rotationOrderBadge: {
     width: 28,
     alignItems: 'center',
   },
   rotationOrderNumber: {
     fontWeight: '800',
-    color: colors.textSecondary,
-  },
-  activeOrderNumber: {
-    color: colors.secondary,
   },
   memberAvatar: {
-    backgroundColor: colors.secondary,
     marginRight: spacing.sm,
-  },
-  activeAvatar: {
-    backgroundColor: colors.secondary,
   },
   memberNameContainer: {
     flex: 1,
   },
   memberNameText: {
     fontWeight: '700',
-    color: colors.text,
-  },
-  activeMemberName: {
-    color: colors.secondary,
-    fontWeight: '800',
   },
   currentTurnBadge: {
-    color: colors.secondary,
+    color: '#0284C7',
     fontWeight: '700',
     marginTop: 2,
   },
   historyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    elevation: 1,
+    borderRadius: 20,
     paddingVertical: spacing.xs,
     borderWidth: 1,
-    borderColor: colors.border,
   },
   emptyHistory: {
     padding: spacing.md,
     alignItems: 'center',
   },
   emptyHistoryText: {
-    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -659,19 +689,16 @@ const styles = StyleSheet.create({
   },
   historyBuyer: {
     fontWeight: '700',
-    color: colors.text,
   },
   historyDate: {
-    color: colors.textSecondary,
     marginTop: 2,
+    fontSize: 12,
   },
   deleteButton: {
     marginTop: spacing.xl,
-    borderColor: colors.error,
-    borderRadius: borderRadius.md,
+    borderRadius: 20,
   },
   dialogDescription: {
-    color: colors.textSecondary,
     marginBottom: spacing.sm,
   },
   dialogList: {
@@ -684,7 +711,6 @@ const styles = StyleSheet.create({
   },
   reorderIndex: {
     width: 24,
-    color: colors.textSecondary,
     fontWeight: '700',
   },
   reorderName: {
@@ -698,7 +724,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   snackbar: {
-    backgroundColor: colors.text,
+    backgroundColor: '#1E293B',
   },
 });
 

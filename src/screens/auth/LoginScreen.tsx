@@ -12,10 +12,11 @@ import {
   Button,
   TextInput,
   Snackbar,
-  useTheme,
 } from 'react-native-paper';
 import { useAuth } from '../../hooks/useAuth';
-import { colors, spacing, borderRadius } from '../../constants/theme';
+import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
+import { useLanguageStore } from '../../store/useLanguageStore';
+import { soundService } from '../../services/soundService';
 
 interface LoginScreenProps {
   navigation: {
@@ -24,54 +25,35 @@ interface LoginScreenProps {
 }
 
 /**
- * Login screen allowing users to authenticate with email and password.
+ * Apple Liquid Glass Login Screen
  */
 export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
-  const paperTheme = useTheme();
-  const { login, loading, signInDemo, error: authError } = useAuth();
+  const { isDark } = useThemeStore();
+  const tokens = getLiquidGlassTokens(isDark);
+  const { t } = useLanguageStore();
+  const { login, loading, error: authError, clearError } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
-  const [demoLoading, setDemoLoading] = useState(false);
 
-  const handleDemoLogin = async () => {
-    setDemoLoading(true);
-    try {
-      if (signInDemo) {
-        await signInDemo();
-      }
-    } catch {
-      setErrorMessage('Erreur lors du lancement de la démo.');
-      setSnackbarVisible(true);
-    } finally {
-      setDemoLoading(false);
-    }
-  };
-
-  /**
-   * Validates input fields and attempts user login.
-   */
   const handleLogin = async () => {
+    soundService.playPopSound();
     const trimmedEmail = email.trim();
-    if (!trimmedEmail) {
-      setErrorMessage('Veuillez saisir votre adresse e-mail.');
-      setSnackbarVisible(true);
-      return;
-    }
-    if (!password) {
-      setErrorMessage('Veuillez saisir votre mot de passe.');
+    if (!trimmedEmail || !password) {
+      setErrorMessage('Veuillez renseigner votre email et votre mot de passe.');
       setSnackbarVisible(true);
       return;
     }
 
     try {
       await login(trimmedEmail, password);
+      soundService.playSuccessSound();
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'Échec de la connexion. Vérifiez vos identifiants.';
+        err instanceof Error ? err.message : 'Erreur lors de la connexion.';
       setErrorMessage(message);
       setSnackbarVisible(true);
     }
@@ -80,27 +62,44 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.flexContainer}
+      style={[styles.flexContainer, { backgroundColor: tokens.bg }]}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        {/* Logo and Brand Header */}
+        {/* Brand Header with Liquid Glow */}
         <View style={styles.header}>
-          <Text variant="displaySmall" style={styles.logoEmoji}>
-            🏠
-          </Text>
-          <Text variant="headlineLarge" style={styles.appTitle}>
+          <View
+            style={[
+              styles.logoBadge,
+              {
+                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.9)',
+                borderColor: tokens.border,
+              },
+            ]}
+          >
+            <Text style={styles.logoEmoji}>🏠</Text>
+          </View>
+          <Text variant="headlineMedium" style={[styles.appTitle, { color: tokens.text }]}>
             ColocManager
           </Text>
-          <Text variant="bodyMedium" style={styles.subtitle}>
-            Organisez votre colocation en toute sérénité
+          <Text variant="bodyMedium" style={[styles.subtitle, { color: tokens.textSecondary }]}>
+            Gestion fluide & équitable de la colocation
           </Text>
         </View>
 
-        {/* Input Form */}
-        <View style={styles.form}>
+        {/* Liquid Glass Form Card */}
+        <View
+          style={[
+            styles.glassCard,
+            {
+              backgroundColor: tokens.card,
+              borderColor: tokens.border,
+            },
+          ]}
+        >
           <TextInput
             label="Adresse e-mail"
             value={email}
@@ -109,8 +108,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
-            left={<TextInput.Icon icon="email-outline" />}
             style={styles.input}
+            textColor={tokens.text}
+            outlineColor={tokens.borderSubtle}
+            activeOutlineColor={tokens.primary}
             disabled={loading}
           />
 
@@ -121,7 +122,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
             mode="outlined"
             secureTextEntry={!showPassword}
             autoCapitalize="none"
-            left={<TextInput.Icon icon="lock-outline" />}
             right={
               <TextInput.Icon
                 icon={showPassword ? 'eye-off' : 'eye'}
@@ -129,62 +129,49 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
               />
             }
             style={styles.input}
+            textColor={tokens.text}
+            outlineColor={tokens.borderSubtle}
+            activeOutlineColor={tokens.primary}
             disabled={loading}
           />
 
-          {/* Forgot Password Link */}
+          {/* Forgot Password */}
           <TouchableOpacity
             onPress={() => navigation.navigate('ForgotPassword')}
             style={styles.forgotPasswordContainer}
             disabled={loading}
           >
-            <Text
-              variant="bodySmall"
-              style={[styles.linkText, { color: paperTheme.colors.primary }]}
-            >
+            <Text variant="bodySmall" style={{ color: tokens.primary, fontWeight: '600' }}>
               Mot de passe oublié ?
             </Text>
           </TouchableOpacity>
 
-          {/* Submit Button */}
+          {/* Login Button */}
           <Button
             mode="contained"
             onPress={handleLogin}
             loading={loading}
             disabled={loading}
+            buttonColor={tokens.primary}
+            textColor="#FFFFFF"
             style={styles.submitButton}
             contentStyle={styles.buttonContent}
+            labelStyle={{ fontWeight: '800', fontSize: 15 }}
           >
             Se connecter
           </Button>
 
-          {/* Quick Demo Button */}
-          <Button
-            mode="outlined"
-            onPress={handleDemoLogin}
-            loading={demoLoading}
-            disabled={loading || demoLoading}
-            style={[styles.submitButton, { marginTop: 12, borderColor: paperTheme.colors.primary }]}
-            contentStyle={styles.buttonContent}
-            textColor={paperTheme.colors.primary}
-          >
-            🚀 Démo Immédiate (Sans compte)
-          </Button>
-
           {/* Register Link */}
           <View style={styles.footer}>
-            <Text variant="bodyMedium" style={styles.footerText}>
-              Pas encore de compte ?{' '}
+            <Text variant="bodyMedium" style={{ color: tokens.textSecondary }}>
+              Nouveau ici ?{' '}
             </Text>
             <TouchableOpacity
               onPress={() => navigation.navigate('Register')}
               disabled={loading}
             >
-              <Text
-                variant="bodyMedium"
-                style={[styles.linkBold, { color: paperTheme.colors.primary }]}
-              >
-                S'inscrire
+              <Text variant="bodyMedium" style={{ color: tokens.primary, fontWeight: '800' }}>
+                Créer un compte
               </Text>
             </TouchableOpacity>
           </View>
@@ -196,16 +183,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
           onDismiss={() => {
             setSnackbarVisible(false);
             setErrorMessage(null);
+            clearError?.();
           }}
           duration={4000}
-          action={{
-            label: 'OK',
-            onPress: () => {
-              setSnackbarVisible(false);
-              setErrorMessage(null);
-            },
-          }}
-          style={styles.snackbar}
+          style={{ backgroundColor: tokens.error }}
         >
           {errorMessage || authError || 'Une erreur est survenue.'}
         </Snackbar>
@@ -217,78 +198,76 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   flexContainer: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xl,
-    maxWidth: 480,
+    paddingHorizontal: 20,
+    paddingVertical: 32,
+    maxWidth: 440,
     width: '100%',
     alignSelf: 'center',
   },
   header: {
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: 28,
+  },
+  logoBadge: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    borderWidth: 1.5,
+    shadowColor: '#0A84FF',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 4,
   },
   logoEmoji: {
-    fontSize: 54,
-    marginBottom: spacing.xs,
+    fontSize: 42,
   },
   appTitle: {
-    fontWeight: '700',
-    color: colors.primary,
-    letterSpacing: 0.5,
+    fontWeight: '900',
+    letterSpacing: -0.5,
   },
   subtitle: {
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
+    marginTop: 4,
     textAlign: 'center',
   },
-  form: {
-    backgroundColor: colors.surface,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
+  glassCard: {
+    padding: 24,
+    borderRadius: 28,
+    borderWidth: 1,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
     elevation: 3,
   },
   input: {
-    marginBottom: spacing.md,
+    marginBottom: 14,
+    backgroundColor: 'transparent',
   },
   forgotPasswordContainer: {
     alignSelf: 'flex-end',
-    marginBottom: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  linkText: {
-    fontWeight: '500',
+    marginBottom: 18,
+    paddingVertical: 4,
   },
   submitButton: {
-    borderRadius: borderRadius.md,
-    marginTop: spacing.xs,
-    marginBottom: spacing.md,
+    borderRadius: 20,
+    marginBottom: 16,
   },
   buttonContent: {
-    paddingVertical: spacing.xs,
+    paddingVertical: 6,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: spacing.sm,
-  },
-  footerText: {
-    color: colors.textSecondary,
-  },
-  linkBold: {
-    fontWeight: '700',
-  },
-  snackbar: {
-    backgroundColor: colors.error,
+    marginTop: 6,
   },
 });
 

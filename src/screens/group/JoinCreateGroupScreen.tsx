@@ -5,36 +5,40 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  TouchableOpacity,
 } from 'react-native';
 import {
   Text,
   Button,
   TextInput,
-  Card,
   Snackbar,
   ActivityIndicator,
-  useTheme,
 } from 'react-native-paper';
 import { useAuth } from '../../hooks/useAuth';
 import { useGroup } from '../../hooks/useGroup';
-import { colors, spacing, borderRadius } from '../../constants/theme';
+import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
+import { useLanguageStore } from '../../store/useLanguageStore';
+import { soundService } from '../../services/soundService';
 
 interface JoinCreateGroupScreenProps {
   navigation: {
     navigate: (screen: string) => void;
     replace?: (screen: string) => void;
-    reset?: (state: any) => void;
   };
 }
 
 type Mode = 'idle' | 'create' | 'join';
 
 /**
- * Screen presenting onboarding choice to either create a new shared flat group
- * or join an existing group with an invite code.
+ * Onboarding screen for room assignment:
+ * 1. Join an existing flatshare using invite code
+ * 2. Create a new flatshare and become Administrator
  */
 export const JoinCreateGroupScreen: React.FC<JoinCreateGroupScreenProps> = ({ navigation }) => {
-  const paperTheme = useTheme();
+  const { isDark } = useThemeStore();
+  const tokens = getLiquidGlassTokens(isDark);
+  const { t } = useLanguageStore();
+
   const { user } = useAuth();
   const { createGroup, joinGroup, loading, error: groupError } = useGroup();
 
@@ -44,10 +48,8 @@ export const JoinCreateGroupScreen: React.FC<JoinCreateGroupScreenProps> = ({ na
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
 
-  /**
-   * Dispatches new group creation.
-   */
   const handleCreateGroup = async () => {
+    soundService.playPopSound();
     const trimmedName = groupName.trim();
     if (!trimmedName) {
       setErrorMessage('Veuillez renseigner un nom pour votre colocation.');
@@ -57,6 +59,7 @@ export const JoinCreateGroupScreen: React.FC<JoinCreateGroupScreenProps> = ({ na
 
     try {
       await createGroup(trimmedName);
+      soundService.playSuccessSound();
       if (navigation.replace) {
         navigation.replace('Main');
       } else {
@@ -64,16 +67,14 @@ export const JoinCreateGroupScreen: React.FC<JoinCreateGroupScreenProps> = ({ na
       }
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'Impossible de créer le groupe. Réessayez.';
+        err instanceof Error ? err.message : 'Impossible de créer la colocation.';
       setErrorMessage(message);
       setSnackbarVisible(true);
     }
   };
 
-  /**
-   * Dispatches joining an existing group via invite code.
-   */
   const handleJoinGroup = async () => {
+    soundService.playPopSound();
     const trimmedCode = inviteCode.trim().toUpperCase();
     if (!trimmedCode) {
       setErrorMessage("Veuillez saisir le code d'invitation.");
@@ -83,6 +84,7 @@ export const JoinCreateGroupScreen: React.FC<JoinCreateGroupScreenProps> = ({ na
 
     try {
       await joinGroup(trimmedCode);
+      soundService.playSuccessSound();
       if (navigation.replace) {
         navigation.replace('Main');
       } else {
@@ -99,123 +101,180 @@ export const JoinCreateGroupScreen: React.FC<JoinCreateGroupScreenProps> = ({ na
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.flexContainer}
+      style={[styles.flexContainer, { backgroundColor: tokens.bg }]}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         {/* Welcome Header */}
         <View style={styles.header}>
-          <Text variant="headlineSmall" style={styles.greeting}>
-            Bienvenue{user?.displayName ? `, ${user.displayName}` : ''} ! 👋
+          <View
+            style={[
+              styles.logoBadge,
+              {
+                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.9)',
+                borderColor: tokens.border,
+              },
+            ]}
+          >
+            <Text style={{ fontSize: 38 }}>🔑</Text>
+          </View>
+          <Text variant="headlineSmall" style={[styles.greeting, { color: tokens.text }]}>
+            {t('welcome')}{user?.displayName ? `, ${user.displayName}` : ''} ! 👋
           </Text>
-          <Text variant="bodyMedium" style={styles.subtitle}>
-            Pour commencer, configurez votre colocation ou rejoignez vos colocataires.
+          <Text variant="bodyMedium" style={[styles.subtitle, { color: tokens.textSecondary }]}>
+            {t('onboardingSub')}
           </Text>
         </View>
 
-        {/* Option 1: Create Group Card */}
-        <Card
+        {/* Option 1: Join Existing Group */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => {
+            soundService.playPopSound();
+            setActiveMode(activeMode === 'join' ? 'idle' : 'join');
+          }}
           style={[
-            styles.card,
-            activeMode === 'create' && { borderColor: paperTheme.colors.primary, borderWidth: 2 },
+            styles.liquidCard,
+            {
+              backgroundColor: tokens.card,
+              borderColor: activeMode === 'join' ? tokens.primary : tokens.border,
+            },
           ]}
-          onPress={() => setActiveMode(activeMode === 'create' ? 'idle' : 'create')}
         >
-          <Card.Content>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardIcon}>🏠</Text>
-              <View style={styles.cardTitleContainer}>
-                <Text variant="titleMedium" style={styles.cardTitle}>
-                  Créer un groupe
-                </Text>
-                <Text variant="bodySmall" style={styles.cardSubtitle}>
-                  Vous êtes le premier colocataire ? Initialisez l'espace commun.
-                </Text>
-              </View>
+          <View style={styles.cardHeader}>
+            <View
+              style={[
+                styles.iconBubble,
+                {
+                  backgroundColor: isDark ? 'rgba(10, 132, 255, 0.2)' : 'rgba(10, 132, 255, 0.1)',
+                },
+              ]}
+            >
+              <Text style={{ fontSize: 28 }}>🔗</Text>
             </View>
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <Text variant="titleMedium" style={{ fontWeight: '800', color: tokens.text }}>
+                {t('joinGroupTitle')}
+              </Text>
+              <Text variant="bodySmall" style={{ color: tokens.textSecondary, marginTop: 2 }}>
+                {t('joinGroupSub')}
+              </Text>
+            </View>
+          </View>
 
-            {activeMode === 'create' && (
-              <View style={styles.actionForm}>
-                <TextInput
-                  label="Nom de la colocation"
-                  placeholder="Ex: Les Lauriers, Appart 4B..."
-                  value={groupName}
-                  onChangeText={setGroupName}
-                  mode="outlined"
-                  disabled={loading}
-                  style={styles.input}
-                  autoFocus
-                />
-                <Button
-                  mode="contained"
-                  onPress={handleCreateGroup}
-                  loading={loading}
-                  disabled={loading}
-                  style={styles.actionButton}
-                >
-                  Valider et créer
-                </Button>
-              </View>
-            )}
-          </Card.Content>
-        </Card>
+          {activeMode === 'join' && (
+            <View style={styles.expandedForm}>
+              <TextInput
+                label="Code d'invitation (ex: ABC-1234)"
+                placeholder="ABC-1234"
+                value={inviteCode}
+                onChangeText={(val) => setInviteCode(val.toUpperCase())}
+                mode="outlined"
+                autoCapitalize="characters"
+                disabled={loading}
+                style={styles.input}
+                textColor={tokens.text}
+                outlineColor={tokens.borderSubtle}
+                activeOutlineColor={tokens.primary}
+                autoFocus
+              />
+              <Button
+                mode="contained"
+                buttonColor={tokens.primary}
+                textColor="#FFFFFF"
+                onPress={handleJoinGroup}
+                loading={loading}
+                disabled={loading}
+                style={styles.actionButton}
+                labelStyle={{ fontWeight: '800' }}
+              >
+                {t('validateJoin')}
+              </Button>
+            </View>
+          )}
+        </TouchableOpacity>
 
-        {/* Option 2: Join Group Card */}
-        <Card
+        {/* Option 2: Create Group & Become Admin */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => {
+            soundService.playPopSound();
+            setActiveMode(activeMode === 'create' ? 'idle' : 'create');
+          }}
           style={[
-            styles.card,
-            activeMode === 'join' && { borderColor: paperTheme.colors.primary, borderWidth: 2 },
+            styles.liquidCard,
+            {
+              backgroundColor: tokens.card,
+              borderColor: activeMode === 'create' ? tokens.adminGold : tokens.border,
+            },
           ]}
-          onPress={() => setActiveMode(activeMode === 'join' ? 'idle' : 'join')}
         >
-          <Card.Content>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardIcon}>🔗</Text>
-              <View style={styles.cardTitleContainer}>
-                <Text variant="titleMedium" style={styles.cardTitle}>
-                  Rejoindre un groupe
-                </Text>
-                <Text variant="bodySmall" style={styles.cardSubtitle}>
-                  Utilisez le code à 6 caractères partagé par vos colocataires.
-                </Text>
-              </View>
+          <View style={styles.cardHeader}>
+            <View
+              style={[
+                styles.iconBubble,
+                {
+                  backgroundColor: isDark ? 'rgba(255, 214, 10, 0.2)' : 'rgba(255, 214, 10, 0.15)',
+                },
+              ]}
+            >
+              <Text style={{ fontSize: 28 }}>👑</Text>
             </View>
-
-            {activeMode === 'join' && (
-              <View style={styles.actionForm}>
-                <TextInput
-                  label="Code d'invitation"
-                  placeholder="Ex: ABC123"
-                  value={inviteCode}
-                  onChangeText={(val) => setInviteCode(val.toUpperCase())}
-                  mode="outlined"
-                  autoCapitalize="characters"
-                  disabled={loading}
-                  style={styles.input}
-                  autoFocus
-                />
-                <Button
-                  mode="contained"
-                  onPress={handleJoinGroup}
-                  loading={loading}
-                  disabled={loading}
-                  style={styles.actionButton}
-                >
-                  Rejoindre le groupe
-                </Button>
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text variant="titleMedium" style={{ fontWeight: '800', color: tokens.text }}>
+                  {t('createGroupTitle')}
+                </Text>
+                <View style={styles.adminPill}>
+                  <Text style={styles.adminPillText}>Admin</Text>
+                </View>
               </View>
-            )}
-          </Card.Content>
-        </Card>
+              <Text variant="bodySmall" style={{ color: tokens.textSecondary, marginTop: 2 }}>
+                {t('createGroupSub')}
+              </Text>
+            </View>
+          </View>
+
+          {activeMode === 'create' && (
+            <View style={styles.expandedForm}>
+              <TextInput
+                label="Nom de la colocation"
+                placeholder={t('colocNamePlaceholder')}
+                value={groupName}
+                onChangeText={setGroupName}
+                mode="outlined"
+                disabled={loading}
+                style={styles.input}
+                textColor={tokens.text}
+                outlineColor={tokens.borderSubtle}
+                activeOutlineColor={tokens.primary}
+                autoFocus
+              />
+              <Button
+                mode="contained"
+                buttonColor={tokens.secondary}
+                textColor="#FFFFFF"
+                onPress={handleCreateGroup}
+                loading={loading}
+                disabled={loading}
+                style={styles.actionButton}
+                labelStyle={{ fontWeight: '800' }}
+              >
+                {t('validateCreate')}
+              </Button>
+            </View>
+          )}
+        </TouchableOpacity>
 
         {loading && (
           <ActivityIndicator
             animating
             size="large"
-            color={colors.primary}
-            style={styles.loadingIndicator}
+            color={tokens.primary}
+            style={{ marginTop: 24 }}
           />
         )}
 
@@ -227,14 +286,7 @@ export const JoinCreateGroupScreen: React.FC<JoinCreateGroupScreenProps> = ({ na
             setErrorMessage(null);
           }}
           duration={4000}
-          action={{
-            label: 'OK',
-            onPress: () => {
-              setSnackbarVisible(false);
-              setErrorMessage(null);
-            },
-          }}
-          style={styles.snackbar}
+          style={{ backgroundColor: tokens.error }}
         >
           {errorMessage || groupError || 'Une erreur est survenue.'}
         </Snackbar>
@@ -246,76 +298,86 @@ export const JoinCreateGroupScreen: React.FC<JoinCreateGroupScreenProps> = ({ na
 const styles = StyleSheet.create({
   flexContainer: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xl,
+    paddingHorizontal: 20,
+    paddingVertical: 36,
     maxWidth: 480,
     width: '100%',
     alignSelf: 'center',
   },
   header: {
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: 28,
+  },
+  logoBadge: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    borderWidth: 1.5,
   },
   greeting: {
-    fontWeight: '700',
-    color: colors.primary,
+    fontWeight: '900',
     textAlign: 'center',
   },
   subtitle: {
-    color: colors.textSecondary,
     textAlign: 'center',
-    marginTop: spacing.xs,
-    paddingHorizontal: spacing.sm,
+    marginTop: 6,
+    paddingHorizontal: 12,
+    lineHeight: 20,
   },
-  card: {
-    backgroundColor: colors.surface,
-    marginBottom: spacing.lg,
-    borderRadius: borderRadius.lg,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: 'transparent',
+  liquidCard: {
+    padding: 20,
+    borderRadius: 26,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 3,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  cardIcon: {
-    fontSize: 36,
-    marginRight: spacing.md,
+  iconBubble: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  cardTitleContainer: {
-    flex: 1,
+  adminPill: {
+    marginLeft: 8,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
   },
-  cardTitle: {
-    fontWeight: '700',
-    color: colors.text,
+  adminPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#B45309',
   },
-  cardSubtitle: {
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  actionForm: {
-    marginTop: spacing.md,
-    paddingTop: spacing.sm,
+  expandedForm: {
+    marginTop: 18,
+    paddingTop: 16,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
+    borderTopColor: 'rgba(150, 150, 150, 0.2)',
   },
   input: {
-    marginBottom: spacing.md,
+    marginBottom: 12,
+    backgroundColor: 'transparent',
   },
   actionButton: {
-    borderRadius: borderRadius.md,
-  },
-  loadingIndicator: {
-    marginTop: spacing.md,
-  },
-  snackbar: {
-    backgroundColor: colors.error,
+    borderRadius: 18,
+    paddingVertical: 4,
   },
 });
 

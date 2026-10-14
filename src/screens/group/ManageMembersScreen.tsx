@@ -4,13 +4,12 @@ import {
   StyleSheet,
   FlatList,
   Alert,
+  TouchableOpacity,
 } from 'react-native';
 import {
   Text,
   Button,
   Avatar,
-  IconButton,
-  Surface,
   Dialog,
   Portal,
   Snackbar,
@@ -20,7 +19,9 @@ import {
 import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '../../hooks/useAuth';
 import { useGroup } from '../../hooks/useGroup';
-import { colors, spacing, borderRadius } from '../../constants/theme';
+import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
+import { useLanguageStore } from '../../store/useLanguageStore';
+import { soundService } from '../../services/soundService';
 import { GroupMember } from '../../types';
 
 interface ManageMembersScreenProps {
@@ -30,14 +31,21 @@ interface ManageMembersScreenProps {
 }
 
 /**
- * Screen allowing administrators to manage room members, invite codes, and permissions.
+ * Screen allowing administrators to manage roommates,
+ * transfer administrator role to another member, and share invite codes.
  */
 export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ navigation }) => {
+  const { isDark } = useThemeStore();
+  const tokens = getLiquidGlassTokens(isDark);
+  const { t } = useLanguageStore();
+
   const { user } = useAuth();
-  const { group, members, removeMember, regenerateInviteCode, loading, error: groupError } = useGroup();
+  const { group, members, removeMember, transferAdmin, regenerateInviteCode, loading, error: groupError } = useGroup();
 
   const [memberToRemove, setMemberToRemove] = useState<GroupMember | null>(null);
+  const [memberToPromote, setMemberToPromote] = useState<GroupMember | null>(null);
   const [removeDialogVisible, setRemoveDialogVisible] = useState(false);
+  const [transferDialogVisible, setTransferDialogVisible] = useState(false);
   const [regenerateDialogVisible, setRegenerateDialogVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
@@ -48,29 +56,48 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
     (group?.adminUid === user?.uid ||
       members.some((m) => (m.userId === user?.uid || m.id === user?.uid) && m.role === 'admin'));
 
-  /**
-   * Copies the current invite code to system clipboard.
-   */
   const handleCopyInviteCode = async () => {
     if (!group?.inviteCode) return;
+    soundService.playPopSound();
     try {
       await Clipboard.setStringAsync(group.inviteCode);
-      setSnackbarMessage('Code d\'invitation copié dans le presse-papier !');
+      setSnackbarMessage(t('codeCopied'));
       setSnackbarVisible(true);
     } catch {
-      Alert.alert('Code d\'invitation', group.inviteCode);
+      Alert.alert(t('inviteCodeTitle'), group.inviteCode);
     }
   };
 
-  /**
-   * Prompts and regenerates the group's invite code.
-   */
+  const handleConfirmTransferAdmin = async () => {
+    if (!memberToPromote || !group?.id) return;
+    const targetUid = memberToPromote.userId || memberToPromote.id;
+    setTransferDialogVisible(false);
+    setActionLoading(true);
+    try {
+      await transferAdmin(group.id, targetUid);
+      soundService.playSuccessSound();
+      setSnackbarMessage(
+        t('transferAdminSuccess', { name: memberToPromote.displayName || 'Le colocataire' })
+      );
+      setSnackbarVisible(true);
+      setMemberToPromote(null);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Erreur lors du transfert des droits.';
+      setSnackbarMessage(message);
+      setSnackbarVisible(true);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleConfirmRegenerateCode = async () => {
     setRegenerateDialogVisible(false);
     setActionLoading(true);
     try {
       await regenerateInviteCode();
-      setSnackbarMessage('Nouveau code d\'invitation généré !');
+      soundService.playSuccessSound();
+      setSnackbarMessage(t('codeCopied'));
       setSnackbarVisible(true);
     } catch (err: unknown) {
       const message =
@@ -82,9 +109,6 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
     }
   };
 
-  /**
-   * Confirms removal of a room member.
-   */
   const handleConfirmRemoveMember = async () => {
     if (!memberToRemove) return;
     const targetId = memberToRemove.userId || memberToRemove.id;
@@ -92,6 +116,7 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
     setActionLoading(true);
     try {
       await removeMember(targetId);
+      soundService.playPopSound();
       setSnackbarMessage(`${memberToRemove.displayName || 'Le membre'} a été retiré.`);
       setSnackbarVisible(true);
       setMemberToRemove(null);
@@ -105,33 +130,41 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
     }
   };
 
-  /**
-   * Renders each individual member item.
-   */
   const renderMemberItem = ({ item }: { item: GroupMember }) => {
     const isMemberAdmin = item.role === 'admin' || item.userId === group?.adminUid;
     const isSelf = item.userId === user?.uid || item.id === user?.uid;
-
-    const initial = (item.displayName || item.email || '?')
-      .charAt(0)
-      .toUpperCase();
+    const initial = (item.displayName || item.email || '?').charAt(0).toUpperCase();
 
     return (
-      <Surface style={styles.memberCard}>
+      <View
+        style={[
+          styles.memberCard,
+          {
+            backgroundColor: tokens.card,
+            borderColor: isMemberAdmin ? tokens.adminGold : tokens.border,
+          },
+        ]}
+      >
         <View style={styles.memberLeft}>
-          <Avatar.Text size={44} label={initial} style={styles.avatar} />
+          <Avatar.Text
+            size={44}
+            label={initial}
+            style={{
+              backgroundColor: isMemberAdmin ? tokens.adminGold : tokens.primary,
+            }}
+          />
           <View style={styles.memberInfo}>
             <View style={styles.nameRow}>
-              <Text variant="titleMedium" style={styles.memberName}>
+              <Text variant="titleMedium" style={[styles.memberName, { color: tokens.text }]}>
                 {item.displayName || 'Colocataire'}
               </Text>
               {isSelf && (
-                <Text variant="bodySmall" style={styles.selfBadge}>
+                <Text variant="bodySmall" style={[styles.selfBadge, { color: tokens.primary }]}>
                   (Vous)
                 </Text>
               )}
             </View>
-            <Text variant="bodySmall" style={styles.memberEmail}>
+            <Text variant="bodySmall" style={{ color: tokens.textSecondary }}>
               {item.email || 'Email non renseigné'}
             </Text>
           </View>
@@ -140,69 +173,90 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
         <View style={styles.memberRight}>
           {isMemberAdmin ? (
             <View style={styles.adminBadge}>
-              <Text style={{ fontSize: 14, marginRight: 4 }}>👑</Text>
+              <Text style={{ fontSize: 13, marginRight: 4 }}>👑</Text>
               <Text variant="labelSmall" style={styles.adminText}>
                 Admin
               </Text>
             </View>
           ) : (
             isAdmin && (
-              <Button
-                mode="text"
-                textColor={colors.error}
-                compact
-                onPress={() => {
-                  setMemberToRemove(item);
-                  setRemoveDialogVisible(true);
-                }}
-              >
-                Retirer
-              </Button>
+              <View style={styles.adminActionsRow}>
+                {/* Transfer Admin Button */}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    soundService.playPopSound();
+                    setMemberToPromote(item);
+                    setTransferDialogVisible(true);
+                  }}
+                  style={[styles.actionPillBtn, { borderColor: tokens.adminGold }]}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#B45309' }}>
+                    👑 {t('transferAdminBtn')}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Remove Member Button */}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    soundService.playPopSound();
+                    setMemberToRemove(item);
+                    setRemoveDialogVisible(true);
+                  }}
+                  style={[styles.actionPillBtn, { borderColor: tokens.error, marginLeft: 6 }]}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: tokens.error }}>
+                    ✕
+                  </Text>
+                </TouchableOpacity>
+              </View>
             )
           )}
         </View>
-      </Surface>
+      </View>
     );
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: tokens.bg }]}>
       <View style={styles.contentWrapper}>
-        {/* Top Header */}
-        <View style={styles.header}>
+        {/* Header Bar */}
+        <View style={[styles.header, { backgroundColor: tokens.surface, borderColor: tokens.border }]}>
           <Button
             mode="text"
             onPress={() => navigation.goBack()}
             style={{ margin: 0 }}
+            textColor={tokens.primary}
             labelStyle={{ fontSize: 16 }}
           >
-            ← Retour
+            ← {t('home')}
           </Button>
-          <Text variant="titleMedium" style={styles.headerTitle}>
-            Gestion des Colocataires
+          <Text variant="titleMedium" style={[styles.headerTitle, { color: tokens.text }]}>
+            {t('membersTitle')}
           </Text>
           <View style={{ width: 60 }} />
         </View>
 
-        {/* Admin Access Check */}
-        {!isAdmin ? (
-          <Surface style={styles.nonAdminBanner}>
-            <Text variant="bodySmall" style={styles.nonAdminText}>
-              ℹ️ Seul l'administrateur peut exclure des membres ou régénérer le code d'invitation.
+        {/* Admin Info Banner */}
+        {isAdmin ? (
+          <View style={[styles.infoBanner, { backgroundColor: 'rgba(255, 214, 10, 0.12)', borderColor: tokens.adminGold }]}>
+            <Text variant="bodySmall" style={{ color: isDark ? '#FDE68A' : '#92400E', lineHeight: 18 }}>
+              👑 Vous êtes l'Administrateur. Vous pouvez inviter des colocataires, ajuster les rôles ou céder la place d'administrateur à un autre membre.
             </Text>
-          </Surface>
+          </View>
         ) : (
-          <Surface style={styles.adminInfoBanner}>
-            <Text variant="bodySmall" style={styles.adminInfoText}>
-              👑 En tant qu'administrateur, vous pouvez partager le code d'invitation ci-dessous avec vos colocataires pour qu'ils rejoignent l'application.
+          <View style={[styles.infoBanner, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9', borderColor: tokens.border }]}>
+            <Text variant="bodySmall" style={{ color: tokens.textSecondary, lineHeight: 18 }}>
+              ℹ️ Seul l'administrateur peut inviter, exclure ou modifier les rôles de la colocation.
             </Text>
-          </Surface>
+          </View>
         )}
 
-        {/* Member Count */}
+        {/* Member Count Header */}
         <View style={styles.listHeader}>
-          <Text variant="titleSmall" style={styles.listSubtitle}>
-            {members.length} {members.length > 1 ? 'membres dans la colocation' : 'membre dans la colocation'}
+          <Text style={[styles.listSubtitle, { color: tokens.textSecondary }]}>
+            {members.length} {t('registeredMembers')}
           </Text>
         </View>
 
@@ -212,41 +266,60 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
           keyExtractor={(item) => item.id || item.userId}
           renderItem={renderMemberItem}
           contentContainerStyle={styles.listContent}
-          ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             loading ? (
-              <ActivityIndicator style={styles.centered} size="large" color={colors.primary} />
+              <ActivityIndicator style={{ marginTop: 32 }} size="large" color={tokens.primary} />
             ) : (
-              <Text style={styles.emptyText}>Aucun membre trouvé.</Text>
+              <Text style={{ textAlign: 'center', marginTop: 32, color: tokens.textSecondary }}>
+                Aucun membre trouvé.
+              </Text>
             )
           }
         />
 
-        <Divider />
+        <Divider style={{ backgroundColor: tokens.border }} />
 
-        {/* Invite Code Section at Bottom */}
-        <Surface style={styles.inviteSection}>
-          <Text variant="titleSmall" style={styles.inviteTitle}>
-            Code d'invitation de la colocation
+        {/* Invite Code Liquid Section */}
+        <View
+          style={[
+            styles.inviteSection,
+            {
+              backgroundColor: tokens.surface,
+              borderColor: tokens.border,
+            },
+          ]}
+        >
+          <Text variant="titleSmall" style={{ fontWeight: '800', color: tokens.text }}>
+            {t('inviteCodeTitle')}
           </Text>
-          <Text variant="bodySmall" style={styles.inviteSubtitle}>
-            Partage ce code à tes nouveaux colocataires pour qu'ils rejoignent le groupe.
+          <Text variant="bodySmall" style={{ color: tokens.textSecondary, marginBottom: 12 }}>
+            {t('inviteCodeSub')}
           </Text>
 
-          <View style={styles.codeContainer}>
-            <Text variant="headlineMedium" style={styles.inviteCode}>
+          <View
+            style={[
+              styles.codeContainer,
+              {
+                backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)',
+                borderColor: tokens.border,
+              },
+            ]}
+          >
+            <Text variant="headlineMedium" style={[styles.inviteCode, { color: tokens.primary }]}>
               {group?.inviteCode || '------'}
             </Text>
             <Button
               mode="contained"
-              buttonColor={colors.primary}
+              buttonColor={tokens.primary}
+              textColor="#FFFFFF"
               compact
               onPress={handleCopyInviteCode}
-              style={{ borderRadius: borderRadius.md }}
-              labelStyle={{ fontSize: 12, fontWeight: '700' }}
+              style={{ borderRadius: 16 }}
+              labelStyle={{ fontSize: 13, fontWeight: '800' }}
             >
-              📋 Copier
+              {t('copyCode')}
             </Button>
           </View>
 
@@ -256,32 +329,68 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
               onPress={() => setRegenerateDialogVisible(true)}
               loading={actionLoading}
               disabled={actionLoading}
-              style={styles.regenerateButton}
-              labelStyle={{ fontSize: 13, fontWeight: '600' }}
+              textColor={tokens.primary}
+              style={{ borderColor: tokens.border, borderRadius: 16 }}
+              labelStyle={{ fontSize: 13, fontWeight: '700' }}
             >
-              🔄 Renouveler le code d'accès
+              {t('regenerateCode')}
             </Button>
           )}
-        </Surface>
+        </View>
       </View>
 
-      {/* Confirmation Dialog for Member Removal */}
+      {/* Transfer Admin Dialog */}
       <Portal>
-        <Dialog visible={removeDialogVisible} onDismiss={() => setRemoveDialogVisible(false)}>
-          <Dialog.Title>Retirer le colocataire</Dialog.Title>
+        <Dialog
+          visible={transferDialogVisible}
+          onDismiss={() => setTransferDialogVisible(false)}
+          style={[styles.dialog, { backgroundColor: isDark ? '#141624' : '#FFFFFF', borderColor: tokens.border }]}
+        >
+          <Dialog.Title style={{ color: tokens.text, fontWeight: '800' }}>
+            {t('transferAdminTitle')}
+          </Dialog.Title>
           <Dialog.Content>
-            <Text variant="bodyMedium">
-              Êtes-vous sûr de vouloir retirer{' '}
-              <Text style={{ fontWeight: '700' }}>
-                {memberToRemove?.displayName || 'ce membre'}
-              </Text>{' '}
-              de la colocation ? Cette action réattribuera ses tâches.
+            <Text variant="bodyMedium" style={{ color: tokens.textSecondary, lineHeight: 22 }}>
+              {t('transferAdminMsg', { name: memberToPromote?.displayName || 'ce colocataire' })}
             </Text>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setRemoveDialogVisible(false)}>Annuler</Button>
+            <Button onPress={() => setTransferDialogVisible(false)} textColor={tokens.textSecondary}>
+              Annuler
+            </Button>
             <Button
-              textColor={colors.error}
+              mode="contained"
+              buttonColor={tokens.adminGold}
+              textColor="#543B00"
+              onPress={handleConfirmTransferAdmin}
+              loading={actionLoading}
+              labelStyle={{ fontWeight: '800' }}
+            >
+              Transférer l'admin
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        {/* Remove Member Dialog */}
+        <Dialog
+          visible={removeDialogVisible}
+          onDismiss={() => setRemoveDialogVisible(false)}
+          style={[styles.dialog, { backgroundColor: isDark ? '#141624' : '#FFFFFF', borderColor: tokens.border }]}
+        >
+          <Dialog.Title style={{ color: tokens.text, fontWeight: '800' }}>
+            Retirer le colocataire
+          </Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodyMedium" style={{ color: tokens.textSecondary, lineHeight: 22 }}>
+              {t('removeMemberConfirm', { name: memberToRemove?.displayName || 'ce membre' })}
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setRemoveDialogVisible(false)} textColor={tokens.textSecondary}>
+              Annuler
+            </Button>
+            <Button
+              textColor={tokens.error}
               onPress={handleConfirmRemoveMember}
               loading={actionLoading}
             >
@@ -290,23 +399,27 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
           </Dialog.Actions>
         </Dialog>
 
-        {/* Confirmation Dialog for Code Regeneration */}
+        {/* Regenerate Code Dialog */}
         <Dialog
           visible={regenerateDialogVisible}
           onDismiss={() => setRegenerateDialogVisible(false)}
+          style={[styles.dialog, { backgroundColor: isDark ? '#141624' : '#FFFFFF', borderColor: tokens.border }]}
         >
-          <Dialog.Title>Régénérer le code d'invitation</Dialog.Title>
+          <Dialog.Title style={{ color: tokens.text, fontWeight: '800' }}>
+            Renouveler le code d'accès
+          </Dialog.Title>
           <Dialog.Content>
-            <Text variant="bodyMedium">
-              L'ancien code deviendra immédiatement invalide. Vos futurs colocataires devront entrer le
-              nouveau code.
+            <Text variant="bodyMedium" style={{ color: tokens.textSecondary, lineHeight: 22 }}>
+              L'ancien code d'invitation ne sera plus valide. Les futurs colocataires devront utiliser le nouveau code.
             </Text>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setRegenerateDialogVisible(false)}>Annuler</Button>
+            <Button onPress={() => setRegenerateDialogVisible(false)} textColor={tokens.textSecondary}>
+              Annuler
+            </Button>
             <Button
               mode="contained"
-              buttonColor={colors.primary}
+              buttonColor={tokens.primary}
               onPress={handleConfirmRegenerateCode}
               loading={actionLoading}
             >
@@ -316,7 +429,7 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
         </Dialog>
       </Portal>
 
-      {/* Feedback Snackbar */}
+      {/* Snackbar Feedback */}
       <Snackbar
         visible={snackbarVisible || Boolean(groupError)}
         onDismiss={() => {
@@ -324,7 +437,7 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
           setSnackbarMessage(null);
         }}
         duration={3500}
-        style={styles.snackbar}
+        style={{ backgroundColor: tokens.text }}
       >
         {snackbarMessage || groupError || ''}
       </Snackbar>
@@ -335,7 +448,6 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   contentWrapper: {
     flex: 1,
@@ -347,81 +459,56 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    elevation: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerTitle: {
     fontWeight: '800',
-    color: colors.text,
   },
-  nonAdminBanner: {
-    margin: spacing.md,
+  infoBanner: {
+    margin: 16,
     marginBottom: 0,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    backgroundColor: '#FFFBEB',
+    padding: 14,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  nonAdminText: {
-    color: '#92400E',
-    fontSize: 13,
-  },
-  adminInfoBanner: {
-    margin: spacing.md,
-    marginBottom: 0,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    backgroundColor: '#EEF2FF',
-    borderWidth: 1,
-    borderColor: '#C7D2FE',
-  },
-  adminInfoText: {
-    color: '#3730A3',
-    fontSize: 13,
-    lineHeight: 18,
   },
   listHeader: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 6,
   },
   listSubtitle: {
-    color: colors.textSecondary,
     fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    fontSize: 12,
+    letterSpacing: 0.6,
+    fontSize: 11,
   },
   listContent: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-    paddingTop: spacing.xs,
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+    paddingTop: 4,
   },
   memberCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.md,
-    elevation: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: 22,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1.2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
   },
   memberLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
-  avatar: {
-    backgroundColor: colors.primary,
-  },
   memberInfo: {
-    marginLeft: spacing.md,
+    marginLeft: 12,
     flex: 1,
   },
   nameRow: {
@@ -429,17 +516,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   memberName: {
-    fontWeight: '700',
-    color: colors.text,
+    fontWeight: '800',
   },
   selfBadge: {
-    marginLeft: spacing.xs,
-    color: colors.primary,
-    fontWeight: '700',
-  },
-  memberEmail: {
-    color: colors.textSecondary,
-    marginTop: 2,
+    marginLeft: 6,
+    fontWeight: '800',
   },
   memberRight: {
     flexDirection: 'row',
@@ -448,66 +529,53 @@ const styles = StyleSheet.create({
   adminBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.xs - 1,
+    backgroundColor: 'rgba(255, 214, 10, 0.2)',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    borderColor: '#FFD60A',
   },
   adminText: {
     color: '#B45309',
     fontWeight: '800',
     fontSize: 11,
   },
+  adminActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionPillBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
   inviteSection: {
-    backgroundColor: colors.surface,
-    padding: spacing.md,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    elevation: 4,
-  },
-  inviteTitle: {
-    fontWeight: '800',
-    color: colors.text,
-  },
-  inviteSubtitle: {
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-    fontSize: 12,
+    padding: 20,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1,
   },
   codeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.lg,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.sm,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.sm,
+    borderRadius: 20,
+    paddingLeft: 16,
+    paddingRight: 8,
+    paddingVertical: 10,
+    marginBottom: 12,
     borderWidth: 1.5,
-    borderColor: colors.border,
   },
   inviteCode: {
-    fontWeight: '800',
+    fontWeight: '900',
     letterSpacing: 4,
-    color: colors.primary,
   },
-  regenerateButton: {
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-  },
-  centered: {
-    marginTop: spacing.xl,
-  },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: spacing.xl,
-    color: colors.textSecondary,
-  },
-  snackbar: {
-    backgroundColor: colors.text,
+  dialog: {
+    borderRadius: 26,
+    borderWidth: 1,
   },
 });
 

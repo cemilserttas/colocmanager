@@ -220,11 +220,7 @@ export const mockStorage = {
 
   async getGroup(): Promise<Group | null> {
     const raw = await AsyncStorage.getItem(STORAGE_KEYS.GROUP);
-    if (!raw) {
-      await AsyncStorage.setItem(STORAGE_KEYS.GROUP, JSON.stringify(DEFAULT_GROUP));
-      return DEFAULT_GROUP;
-    }
-    return JSON.parse(raw);
+    return raw ? JSON.parse(raw) : null;
   },
 
   async setGroup(group: Group | null): Promise<void> {
@@ -237,11 +233,7 @@ export const mockStorage = {
 
   async getMembers(): Promise<GroupMember[]> {
     const raw = await AsyncStorage.getItem(STORAGE_KEYS.MEMBERS);
-    if (!raw) {
-      await AsyncStorage.setItem(STORAGE_KEYS.MEMBERS, JSON.stringify(DEFAULT_MEMBERS));
-      return DEFAULT_MEMBERS;
-    }
-    return JSON.parse(raw);
+    return raw ? JSON.parse(raw) : [];
   },
 
   async setMembers(members: GroupMember[]): Promise<void> {
@@ -250,11 +242,7 @@ export const mockStorage = {
 
   async getProducts(): Promise<Product[]> {
     const raw = await AsyncStorage.getItem(STORAGE_KEYS.PRODUCTS);
-    if (!raw) {
-      await AsyncStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(DEFAULT_PRODUCTS));
-      return DEFAULT_PRODUCTS;
-    }
-    return JSON.parse(raw);
+    return raw ? JSON.parse(raw) : [];
   },
 
   async setProducts(products: Product[]): Promise<void> {
@@ -317,5 +305,13 @@ export const mockStorage = {
       `${STORAGE_KEYS.CLEANING_HISTORY}_${taskId}`,
       JSON.stringify(history)
     );
+  },
+
+  async clearAll(): Promise<void> {
+    for (const key of Object.values(STORAGE_KEYS)) {
+      try {
+        await AsyncStorage.removeItem(key);
+      } catch {}
+    }
   },
 };

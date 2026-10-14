@@ -10,16 +10,20 @@ import {
   Text,
   Button,
   TextInput,
-  Surface,
   SegmentedButtons,
   Chip,
   Snackbar,
   Avatar,
   Divider,
 } from 'react-native-paper';
+import * as Notifications from 'expo-notifications';
 import { useAuth } from '../../hooks/useAuth';
 import { useGroup } from '../../hooks/useGroup';
 import { useCleaning } from '../../hooks/useCleaning';
+import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
+import { useLanguageStore } from '../../store/useLanguageStore';
+import { soundService } from '../../services/soundService';
+import { notificationService } from '../../services/notificationService';
 import { colors, spacing, borderRadius } from '../../constants/theme';
 import { CleaningFrequency, GroupMember } from '../../types';
 
@@ -53,6 +57,10 @@ interface AddCleaningTaskScreenProps {
 export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
   navigation,
 }) => {
+  const { isDark } = useThemeStore();
+  const tokens = getLiquidGlassTokens(isDark);
+  const { t } = useLanguageStore();
+
   const { user } = useAuth();
   const { group, members } = useGroup();
   const { addTask, loading } = useCleaning();
@@ -79,6 +87,7 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
   }, [members, rotationOrder.length]);
 
   const moveUp = (index: number) => {
+    soundService.playPopSound();
     if (index <= 0) return;
     const newOrder = [...rotationOrder];
     const temp = newOrder[index];
@@ -88,6 +97,7 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
   };
 
   const moveDown = (index: number) => {
+    soundService.playPopSound();
     if (index >= rotationOrder.length - 1) return;
     const newOrder = [...rotationOrder];
     const temp = newOrder[index];
@@ -97,24 +107,25 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
   };
 
   const handleAddTask = async () => {
+    soundService.playPopSound();
     const trimmedName = name.trim();
     const trimmedArea = area.trim();
 
     if (!trimmedName) {
-      setErrorMessage('Veuillez saisir le nom de la tâche.');
+      setErrorMessage(t('choreNamePlaceholder') || 'Veuillez saisir le nom de la tâche.');
       setSnackbarVisible(true);
       return;
     }
 
     if (!trimmedArea) {
-      setErrorMessage('Veuillez spécifier la zone ou pièce concernée.');
+      setErrorMessage(t('areaPlaceholder') || 'Veuillez spécifier la zone ou pièce concernée.');
       setSnackbarVisible(true);
       return;
     }
 
     const parsedDate = new Date(dueDateText);
     if (isNaN(parsedDate.getTime())) {
-      setErrorMessage('La date d\'échéance est invalide. Format attendu : AAAA-MM-JJ');
+      setErrorMessage("La date d'échéance est invalide. Format attendu : AAAA-MM-JJ");
       setSnackbarVisible(true);
       return;
     }
@@ -134,6 +145,33 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
         parsedDate.toISOString(),
         rotationOrder
       );
+
+      // Notify roommates in Firestore & local mobile push
+      const otherMembers = members.filter((m) => (m.userId || m.id) !== user?.uid);
+      for (const m of otherMembers) {
+        const uid = m.userId || m.id;
+        try {
+          await notificationService.addNotificationToFirestore(
+            uid,
+            'cleaning',
+            '🧹 Nouvelle tâche de ménage !',
+            `L'administrateur a programmé "${trimmedName}" (${trimmedArea}).`
+          );
+        } catch {}
+      }
+
+      try {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: '🧹 Nouvelle tâche de ménage !',
+            body: `L'administrateur a programmé "${trimmedName}" (${trimmedArea}).`,
+            sound: true,
+          },
+          trigger: null,
+        });
+      } catch {}
+
+      soundService.playSuccessSound();
       navigation.goBack();
     } catch (err: unknown) {
       const message =
@@ -146,15 +184,22 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
 
   if (!isAdmin) {
     return (
-      <View style={styles.unauthorizedContainer}>
+      <View style={[styles.unauthorizedContainer, { backgroundColor: tokens.bg }]}>
         <Text style={styles.lockIcon}>🔒</Text>
-        <Text variant="titleMedium" style={styles.unauthorizedTitle}>
+        <Text variant="titleMedium" style={{ fontWeight: '800', color: tokens.text }}>
           Accès réservé à l'administrateur
         </Text>
-        <Text variant="bodyMedium" style={styles.unauthorizedSubtitle}>
+        <Text variant="bodyMedium" style={{ color: tokens.textSecondary, textAlign: 'center', marginTop: 6, paddingHorizontal: 24 }}>
           Seul l'administrateur peut programmer de nouvelles corvées de ménage récurrentes.
         </Text>
-        <Button mode="contained" onPress={() => navigation.goBack()} style={{ marginTop: spacing.md }}>
+        <Button
+          mode="contained"
+          onPress={() => {
+            soundService.playPopSound();
+            navigation.goBack();
+          }}
+          style={{ marginTop: spacing.md, backgroundColor: tokens.accent, borderRadius: 20 }}
+        >
           Retour
         </Button>
       </View>
@@ -164,21 +209,24 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.flexContainer}
+      style={[styles.flexContainer, { backgroundColor: tokens.bg }]}
     >
       <View style={styles.contentWrapper}>
-        {/* Top Bar */}
-        <View style={styles.topBar}>
+        {/* Liquid Glass Header */}
+        <View style={[styles.topBar, { backgroundColor: tokens.surface, borderBottomColor: tokens.border }]}>
           <Button
             mode="text"
-            onPress={() => navigation.goBack()}
+            onPress={() => {
+              soundService.playPopSound();
+              navigation.goBack();
+            }}
             style={{ margin: 0 }}
-            labelStyle={{ fontSize: 16 }}
+            labelStyle={{ fontSize: 16, color: tokens.accent, fontWeight: '700' }}
           >
             ← Retour
           </Button>
-          <Text variant="titleMedium" style={styles.screenTitle}>
-            Nouvelle Tâche de Ménage
+          <Text variant="titleMedium" style={[styles.screenTitle, { color: tokens.text }]}>
+            {t('addChoreTitle') || 'Nouvelle Tâche'}
           </Text>
           <View style={{ width: 60 }} />
         </View>
@@ -189,60 +237,72 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
           showsVerticalScrollIndicator={false}
         >
           {/* Name and Area */}
-          <Surface style={styles.cardSection}>
-            <Text variant="titleSmall" style={styles.sectionLabel}>
-              Détails de la tâche
+          <View style={[styles.cardSection, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <Text variant="titleSmall" style={[styles.sectionLabel, { color: tokens.text }]}>
+              {t('choreNameLabel') || 'Détails de la tâche'}
             </Text>
 
             <TextInput
-              label="Nom de la tâche"
-              placeholder="Ex: Nettoyer la cuisine, Vider les poubelles..."
+              label={t('choreNameLabel') || 'Nom de la tâche'}
+              placeholder={t('choreNamePlaceholder') || 'Ex: Nettoyer la cuisine, Vider les poubelles...'}
               value={name}
               onChangeText={setName}
               mode="outlined"
-              style={styles.input}
+              textColor={tokens.text}
+              style={[styles.input, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.8)' }]}
+              outlineColor={tokens.border}
+              activeOutlineColor={tokens.accent}
               disabled={submitting}
             />
 
             <TextInput
-              label="Zone ou pièce"
-              placeholder="Ex: Cuisine, Salle de bain, Salon, WC..."
+              label={t('areaLabel') || 'Zone ou pièce'}
+              placeholder={t('areaPlaceholder') || 'Ex: Cuisine, Salle de bain, Salon, WC...'}
               value={area}
               onChangeText={setArea}
               mode="outlined"
-              style={styles.input}
+              textColor={tokens.text}
+              style={[styles.input, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.8)' }]}
+              outlineColor={tokens.border}
+              activeOutlineColor={tokens.accent}
               disabled={submitting}
             />
-          </Surface>
+          </View>
 
           {/* Frequency Segmented Buttons */}
-          <Surface style={styles.cardSection}>
-            <Text variant="titleSmall" style={styles.sectionLabel}>
-              Fréquence de répétition
+          <View style={[styles.cardSection, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <Text variant="titleSmall" style={[styles.sectionLabel, { color: tokens.text }]}>
+              {t('frequencyLabel') || 'Fréquence de répétition'}
             </Text>
             <SegmentedButtons
               value={frequency}
-              onValueChange={(val) => setFrequency(val as CleaningFrequency)}
+              onValueChange={(val) => {
+                soundService.playPopSound();
+                setFrequency(val as CleaningFrequency);
+              }}
               buttons={[
-                { value: 'weekly', label: 'Hebdo' },
-                { value: 'biweekly', label: 'Bi-hebdo' },
-                { value: 'monthly', label: 'Mensuelle' },
+                { value: 'weekly', label: t('weekly') || 'Hebdo' },
+                { value: 'biweekly', label: t('biweekly') || 'Bi-hebdo' },
+                { value: 'monthly', label: t('monthly') || 'Mensuelle' },
               ]}
               style={styles.segmentedButtons}
             />
-          </Surface>
+          </View>
 
           {/* First Due Date */}
-          <Surface style={styles.cardSection}>
-            <Text variant="titleSmall" style={styles.sectionLabel}>
-              Première date d'échéance (AAAA-MM-JJ)
+          <View style={[styles.cardSection, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <Text variant="titleSmall" style={[styles.sectionLabel, { color: tokens.text }]}>
+              {t('dueDate') || "Première date d'échéance"} (AAAA-MM-JJ)
             </Text>
             <TextInput
               placeholder="2026-10-25"
               value={dueDateText}
               onChangeText={setDueDateText}
               mode="outlined"
-              style={styles.input}
+              textColor={tokens.text}
+              style={[styles.input, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.8)' }]}
+              outlineColor={tokens.border}
+              activeOutlineColor={tokens.accent}
               disabled={submitting}
             />
 
@@ -250,42 +310,58 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
             <View style={styles.presetsRow}>
               <Chip
                 compact
-                onPress={() => setDueDateText(getFutureDateString(1))}
-                style={styles.presetChip}
+                onPress={() => {
+                  soundService.playPopSound();
+                  setDueDateText(getFutureDateString(1));
+                }}
+                style={[styles.presetChip, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}
+                textStyle={{ color: tokens.text, fontSize: 12 }}
               >
                 Demain
               </Chip>
               <Chip
                 compact
-                onPress={() => setDueDateText(getFutureDateString(3))}
-                style={styles.presetChip}
+                onPress={() => {
+                  soundService.playPopSound();
+                  setDueDateText(getFutureDateString(3));
+                }}
+                style={[styles.presetChip, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}
+                textStyle={{ color: tokens.text, fontSize: 12 }}
               >
                 Dans 3 jours
               </Chip>
               <Chip
                 compact
-                onPress={() => setDueDateText(getFutureDateString(7))}
-                style={styles.presetChip}
+                onPress={() => {
+                  soundService.playPopSound();
+                  setDueDateText(getFutureDateString(7));
+                }}
+                style={[styles.presetChip, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}
+                textStyle={{ color: tokens.text, fontSize: 12 }}
               >
                 Dans 7 jours
               </Chip>
               <Chip
                 compact
-                onPress={() => setDueDateText(getFutureDateString(14))}
-                style={styles.presetChip}
+                onPress={() => {
+                  soundService.playPopSound();
+                  setDueDateText(getFutureDateString(14));
+                }}
+                style={[styles.presetChip, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}
+                textStyle={{ color: tokens.text, fontSize: 12 }}
               >
                 Dans 14 jours
               </Chip>
             </View>
-          </Surface>
+          </View>
 
           {/* Rotation Order Section */}
-          <Surface style={styles.cardSection}>
-            <Text variant="titleSmall" style={styles.sectionLabel}>
-              Ordre de passage ({rotationOrder.length} colocataires)
+          <View style={[styles.cardSection, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <Text variant="titleSmall" style={[styles.sectionLabel, { color: tokens.text }]}>
+              {t('rotationOrder') || 'Ordre de passage'} ({rotationOrder.length} colocataires)
             </Text>
-            <Text variant="bodySmall" style={styles.sectionSubtitle}>
-              Le colocataire #1 effectuera la tâche en premier.
+            <Text variant="bodySmall" style={[styles.sectionSubtitle, { color: tokens.textSecondary }]}>
+              {t('rotationOrderSub') || 'Le colocataire #1 effectuera la tâche en premier.'}
             </Text>
 
             <View style={styles.rotationList}>
@@ -297,8 +373,8 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
                 return (
                   <React.Fragment key={`add-clean-rot-${uid}`}>
                     <View style={styles.memberRow}>
-                      <View style={styles.orderBadge}>
-                        <Text variant="labelLarge" style={styles.orderBadgeText}>
+                      <View style={[styles.orderBadge, { backgroundColor: index === 0 ? 'rgba(16, 185, 129, 0.15)' : 'transparent' }]}>
+                        <Text variant="labelLarge" style={[styles.orderBadgeText, { color: index === 0 ? '#10B981' : tokens.textSecondary }]}>
                           {index + 1}
                         </Text>
                       </View>
@@ -306,11 +382,11 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
                       <Avatar.Text
                         size={34}
                         label={memberName.charAt(0).toUpperCase()}
-                        style={styles.memberAvatar}
+                        style={[styles.memberAvatar, { backgroundColor: '#10B981' }]}
                       />
 
-                      <Text variant="bodyMedium" style={styles.memberName} numberOfLines={1}>
-                        {memberName}
+                      <Text variant="bodyMedium" style={[styles.memberName, { color: tokens.text }]} numberOfLines={1}>
+                        {memberName} {index === 0 ? ' (Prochain)' : ''}
                       </Text>
 
                       <View style={styles.orderButtons}>
@@ -319,6 +395,7 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
                           compact
                           disabled={isFirst || submitting}
                           onPress={() => moveUp(index)}
+                          textColor={tokens.accent}
                         >
                           ▲
                         </Button>
@@ -327,29 +404,30 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
                           compact
                           disabled={isLast || submitting}
                           onPress={() => moveDown(index)}
+                          textColor={tokens.accent}
                         >
                           ▼
                         </Button>
                       </View>
                     </View>
-                    {index < rotationOrder.length - 1 && <Divider />}
+                    {index < rotationOrder.length - 1 && <Divider style={{ backgroundColor: tokens.border }} />}
                   </React.Fragment>
                 );
               })}
             </View>
-          </Surface>
+          </View>
 
           {/* Submit Button */}
           <Button
             mode="contained"
-            buttonColor={colors.secondary}
+            buttonColor="#10B981"
             onPress={handleAddTask}
             loading={submitting || loading}
             disabled={submitting || loading}
             style={styles.submitButton}
             contentStyle={styles.submitButtonContent}
           >
-            Créer la tâche de ménage
+            {t('createChoreBtn') || 'Créer la tâche de ménage'}
           </Button>
         </ScrollView>
       </View>
@@ -373,7 +451,6 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
 const styles = StyleSheet.create({
   flexContainer: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   contentWrapper: {
     flex: 1,
@@ -387,33 +464,27 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    elevation: 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   screenTitle: {
     fontWeight: '800',
-    color: colors.text,
+    fontSize: 18,
   },
   scrollContent: {
     padding: spacing.md,
-    paddingBottom: spacing.xl * 2,
+    paddingBottom: spacing.xl * 3,
   },
   cardSection: {
-    backgroundColor: colors.surface,
     padding: spacing.md,
-    borderRadius: borderRadius.lg,
+    borderRadius: 20,
     marginBottom: spacing.md,
-    elevation: 1,
     borderWidth: 1,
-    borderColor: colors.border,
   },
   sectionLabel: {
     fontWeight: '800',
-    color: colors.text,
     marginBottom: spacing.xs,
   },
   sectionSubtitle: {
-    color: colors.textSecondary,
     marginBottom: spacing.sm,
     fontSize: 12,
   },
@@ -430,7 +501,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   presetChip: {
-    backgroundColor: '#F1F5F9',
+    borderRadius: 14,
   },
   rotationList: {
     marginTop: spacing.xs,
@@ -441,52 +512,42 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   orderBadge: {
-    width: 24,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   orderBadgeText: {
     fontWeight: '800',
-    color: colors.textSecondary,
   },
   memberAvatar: {
-    backgroundColor: colors.secondary,
     marginRight: spacing.sm,
     marginLeft: spacing.xs,
   },
   memberName: {
     flex: 1,
     fontWeight: '600',
-    color: colors.text,
   },
   orderButtons: {
     flexDirection: 'row',
   },
   submitButton: {
-    borderRadius: borderRadius.md,
+    borderRadius: 24,
     marginTop: spacing.sm,
   },
   submitButtonContent: {
-    paddingVertical: spacing.xs,
+    paddingVertical: 8,
   },
   unauthorizedContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.xl,
-    backgroundColor: colors.background,
   },
   lockIcon: {
     fontSize: 54,
     marginBottom: spacing.md,
-  },
-  unauthorizedTitle: {
-    fontWeight: '800',
-    color: colors.text,
-  },
-  unauthorizedSubtitle: {
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: spacing.xs,
   },
   snackbar: {
     backgroundColor: colors.error,

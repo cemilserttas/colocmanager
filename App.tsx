@@ -14,12 +14,23 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { paperTheme } from './src/constants/theme';
 import AppNavigator from './src/navigation/AppNavigator';
 import { notificationService } from './src/services/notificationService';
+import { useThemeStore } from './src/store/useThemeStore';
+import { useLanguageStore } from './src/store/useLanguageStore';
+import { useNotificationPreferences } from './src/store/useNotificationPreferences';
+import { NotificationStartupModal } from './src/components/common/NotificationStartupModal';
 
 // Import Firebase config to ensure initialization
 import './firebase.config';
 
 export default function App() {
+  const { isDark } = useThemeStore();
+
   useEffect(() => {
+    // Initialize preferences, themes and internationalization
+    useThemeStore.getState().initializeTheme();
+    useLanguageStore.getState().initializeLanguage();
+    useNotificationPreferences.getState().initializePreferences();
+
     // Setup foreground notifications handler
     try {
       notificationService.setupNotificationHandler();
@@ -52,8 +63,9 @@ export default function App() {
     <SafeAreaProvider>
       <PaperProvider theme={paperTheme}>
         <NavigationContainer>
-          <StatusBar style="light" />
+          <StatusBar style={isDark ? 'light' : 'dark'} />
           <AppNavigator />
+          <NotificationStartupModal />
         </NavigationContainer>
       </PaperProvider>
     </SafeAreaProvider>

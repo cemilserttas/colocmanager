@@ -11,13 +11,15 @@ import {
   Button,
   FAB,
   Chip,
-  Surface,
   Snackbar,
   ActivityIndicator,
 } from 'react-native-paper';
 import { useAuth } from '../../hooks/useAuth';
 import { useGroup } from '../../hooks/useGroup';
 import { useCleaning } from '../../hooks/useCleaning';
+import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
+import { useLanguageStore } from '../../store/useLanguageStore';
+import { soundService } from '../../services/soundService';
 import { colors, spacing, borderRadius } from '../../constants/theme';
 import { CleaningTask, GroupMember } from '../../types';
 
@@ -76,6 +78,10 @@ interface CleaningListScreenProps {
  * assignment rotation order, and completion action triggers.
  */
 export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigation }) => {
+  const { isDark } = useThemeStore();
+  const tokens = getLiquidGlassTokens(isDark);
+  const { t } = useLanguageStore();
+
   const { user } = useAuth();
   const { group, members } = useGroup();
   const {
@@ -111,12 +117,14 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
   }, [fetchTasks]);
 
   /**
-   * Dispatches mark-as-completed for a given cleaning task.
+   * Dispatches mark-as-completed for a given cleaning task with sound.
    */
   const handleMarkCleaned = async (taskId: string, taskName: string) => {
+    soundService.playPopSound();
     setActionLoadingId(taskId);
     try {
       await markAsDone(taskId);
+      soundService.playTaskCompleteSound();
       setSnackbarMessage(`✓ Nettoyage validé : "${taskName}" ! Le tour passe au colocataire suivant.`);
       setSnackbarVisible(true);
     } catch (err: unknown) {
@@ -132,6 +140,9 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
   /**
    * Renders an individual cleaning task card.
    */
+  /**
+   * Renders an individual cleaning task card.
+   */
   const renderCleaningItem = ({ item }: { item: CleaningTask }) => {
     const rotationList = item.rotationOrder || [];
     const currentCleanerUid =
@@ -140,7 +151,7 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
     const isMyTurn = currentCleanerUid === user?.uid;
     const currentCleanerName = currentCleanerUid
       ? isMyTurn
-        ? 'Vous'
+        ? (t('yourTurn') || 'À toi !')
         : getMemberName(currentCleanerUid, members)
       : 'Personne';
 
@@ -150,60 +161,81 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
     return (
       <TouchableOpacity
         activeOpacity={0.7}
-        onPress={() => navigation.navigate('CleaningDetail', { taskId: item.id })}
+        onPress={() => {
+          soundService.playPopSound();
+          navigation.navigate('CleaningDetail', { taskId: item.id });
+        }}
       >
-        <Surface
+        <View
           style={[
             styles.taskCard,
-            overdue && styles.overdueCard,
-            isMyTurn && !overdue && styles.myTurnCard,
+            {
+              backgroundColor: overdue
+                ? isDark ? 'rgba(239, 68, 68, 0.16)' : 'rgba(239, 68, 68, 0.08)'
+                : isMyTurn
+                ? isDark ? 'rgba(2, 132, 199, 0.16)' : 'rgba(2, 132, 199, 0.08)'
+                : tokens.card,
+              borderColor: overdue ? '#EF4444' : isMyTurn ? '#0284C7' : tokens.border,
+            },
           ]}
         >
           {/* Card Header */}
           <View style={styles.cardHeader}>
-            <Text style={styles.areaIcon}>🧹</Text>
+            <View style={[styles.taskIconBubble, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)' }]}>
+              <Text style={styles.areaIcon}>🧹</Text>
+            </View>
             <View style={styles.titleInfo}>
               <View style={styles.nameBadgeRow}>
-                <Text variant="titleMedium" style={styles.taskName}>
+                <Text variant="titleMedium" style={[styles.taskName, { color: tokens.text }]}>
                   {item.name}
                 </Text>
-                <Chip compact style={styles.frequencyChip} textStyle={{ fontSize: 11, fontWeight: '700' }}>
+                <Chip
+                  compact
+                  style={[styles.frequencyChip, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}
+                  textStyle={{ fontSize: 11, fontWeight: '700', color: tokens.textSecondary }}
+                >
                   {FREQUENCY_LABELS[item.frequency] || item.frequency}
                 </Chip>
               </View>
-              <Text variant="bodySmall" style={styles.areaText}>
-                Zone : {item.area || 'Parties communes'}
+              <Text variant="bodySmall" style={[styles.areaText, { color: tokens.textSecondary }]}>
+                {t('areaLabel') || 'Zone'} : {item.area || 'Parties communes'}
               </Text>
             </View>
           </View>
 
           {/* Turn and Due Date Status */}
-          <View style={styles.statusRow}>
+          <View style={[styles.statusRow, { borderTopColor: tokens.border }]}>
             <View style={styles.assigneeContainer}>
-              <Text variant="bodySmall" style={styles.assigneeLabel}>
-                Tour actuel :
+              <Text variant="bodySmall" style={[styles.assigneeLabel, { color: tokens.textSecondary }]}>
+                {t('responsible') || 'Responsable :'}
               </Text>
               <Text
                 variant="bodyMedium"
                 style={[
                   styles.assigneeName,
-                  isMyTurn && styles.myTurnText,
+                  { color: isMyTurn ? '#0284C7' : tokens.text },
                 ]}
               >
-                {currentCleanerName} {isMyTurn ? '👈 (À toi !)' : ''}
+                {currentCleanerName} {isMyTurn ? '👈' : ''}
               </Text>
             </View>
 
             <View style={styles.dateContainer}>
               <Text
                 variant="bodySmall"
-                style={[styles.dueDateText, overdue && styles.overdueDateText]}
+                style={[
+                  styles.dueDateText,
+                  { color: overdue ? '#EF4444' : tokens.textSecondary },
+                ]}
               >
-                {overdue ? '⚠️ En retard !' : '📅 Échéance :'}
+                {overdue ? (t('overdue') || '⚠️ En retard !') : (t('dueDate') || '📅 Échéance :')}
               </Text>
               <Text
                 variant="bodySmall"
-                style={[styles.dueDateText, overdue && styles.overdueDateText]}
+                style={[
+                  styles.dueDateText,
+                  { color: overdue ? '#EF4444' : tokens.text, fontWeight: '700' },
+                ]}
               >
                 {formatDate(item.nextDueDate)}
               </Text>
@@ -215,45 +247,48 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
             <View style={styles.actionRow}>
               <Button
                 mode="contained"
-                buttonColor={overdue ? colors.error : colors.primary}
+                buttonColor={overdue ? '#EF4444' : '#0284C7'}
                 loading={isActionRunning}
                 disabled={isActionRunning}
                 onPress={() => handleMarkCleaned(item.id, item.name)}
                 style={styles.doneButton}
                 labelStyle={styles.doneButtonLabel}
               >
-                FAIT ✓
+                {t('done') || 'FAIT ✓'}
               </Button>
             </View>
           )}
-        </Surface>
+        </View>
       </TouchableOpacity>
     );
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: tokens.bg }]}>
       <View style={styles.contentWrapper}>
         {/* Admin Action Bar */}
         {isAdmin && (
-          <Surface style={styles.adminBar}>
+          <View style={[styles.adminBar, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
             <View style={{ flex: 1, paddingRight: spacing.sm }}>
-              <Text style={styles.adminBarTitle}>👑 Administration Nettoyage</Text>
-              <Text style={styles.adminBarSub}>
+              <Text style={[styles.adminBarTitle, { color: '#0284C7' }]}>👑 Administration Nettoyage</Text>
+              <Text style={[styles.adminBarSub, { color: tokens.textSecondary }]}>
                 Créez des corvées récurrentes et gérez les attributions.
               </Text>
             </View>
             <Button
               mode="contained"
-              buttonColor={colors.secondary}
+              buttonColor="#0284C7"
               compact
               style={styles.addBtnTop}
               labelStyle={{ fontSize: 12, fontWeight: '700' }}
-              onPress={() => navigation.navigate('AddCleaningTask')}
+              onPress={() => {
+                soundService.playPopSound();
+                navigation.navigate('AddCleaningTask');
+              }}
             >
-              + Ménage
+              {t('newChore') || '+ Ménage'}
             </Button>
-          </Surface>
+          </View>
         )}
 
         {/* Cleaning Tasks FlatList */}
@@ -268,34 +303,38 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              colors={[colors.secondary]}
+              tintColor="#0284C7"
+              colors={['#0284C7']}
             />
           }
           ListEmptyComponent={
             loading && !refreshing ? (
-              <ActivityIndicator style={styles.centered} size="large" color={colors.secondary} />
+              <ActivityIndicator style={styles.centered} size="large" color="#0284C7" />
             ) : (
-              <Surface style={styles.emptyCard}>
+              <View style={[styles.emptyCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
                 <Text style={styles.emptyIcon}>✨</Text>
-                <Text variant="titleMedium" style={styles.emptyTitle}>
-                  Aucune tâche de ménage
+                <Text variant="titleMedium" style={[styles.emptyTitle, { color: tokens.text }]}>
+                  {t('noChores') || 'Aucune tâche de ménage'}
                 </Text>
-                <Text variant="bodySmall" style={styles.emptySubtitle}>
+                <Text variant="bodySmall" style={[styles.emptySubtitle, { color: tokens.textSecondary }]}>
                   {isAdmin
-                    ? "Appuyez sur '+ Ménage' pour définir le planning d'entretien (cuisine, poubelles, salle de bain, etc.)."
-                    : "Aucune tâche configurée. L'administrateur peut en créer."}
+                    ? (t('noChoresAdminSub') || "Appuyez sur '+ Ménage' pour définir le planning d'entretien.")
+                    : (t('noChoresMemberSub') || "Aucune tâche configurée. L'administrateur peut en créer.")}
                 </Text>
                 {isAdmin && (
                   <Button
                     mode="contained"
-                    buttonColor={colors.secondary}
-                    style={{ marginTop: spacing.md, borderRadius: borderRadius.md }}
-                    onPress={() => navigation.navigate('AddCleaningTask')}
+                    buttonColor="#0284C7"
+                    style={{ marginTop: spacing.md, borderRadius: 20 }}
+                    onPress={() => {
+                      soundService.playPopSound();
+                      navigation.navigate('AddCleaningTask');
+                    }}
                   >
-                    + Créer une tâche de ménage
+                    {t('newChore') || '+ Créer une tâche'}
                   </Button>
                 )}
-              </Surface>
+              </View>
             )
           }
         />
@@ -305,10 +344,13 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
       {isAdmin && (
         <FAB
           icon="plus"
-          label="Nouvelle tâche"
-          style={styles.fab}
+          label={t('newChore') || 'Nouvelle tâche'}
+          style={[styles.fab, { backgroundColor: '#0284C7' }]}
           color="#FFFFFF"
-          onPress={() => navigation.navigate('AddCleaningTask')}
+          onPress={() => {
+            soundService.playPopSound();
+            navigation.navigate('AddCleaningTask');
+          }}
         />
       )}
 
@@ -331,7 +373,6 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   contentWrapper: {
     flex: 1,
@@ -343,60 +384,47 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.md,
     marginTop: spacing.sm,
     padding: spacing.md,
-    backgroundColor: '#E0F2FE',
-    borderRadius: borderRadius.md,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#BAE6FD',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    elevation: 1,
   },
   adminBarTitle: {
     fontWeight: '800',
-    color: colors.secondary,
     fontSize: 13,
   },
   adminBarSub: {
-    color: '#334155',
     fontSize: 12,
     marginTop: 2,
   },
   addBtnTop: {
-    borderRadius: borderRadius.md,
+    borderRadius: 16,
   },
   listContainer: {
     padding: spacing.md,
-    paddingBottom: spacing.xl * 3,
+    paddingBottom: spacing.xl * 4,
   },
   taskCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
+    borderRadius: 20,
     padding: spacing.md,
-    elevation: 1,
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.04,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 6,
     borderWidth: 1,
-    borderColor: colors.border,
-  },
-  overdueCard: {
-    borderColor: colors.error,
-    backgroundColor: '#FEF2F2',
-  },
-  myTurnCard: {
-    borderColor: colors.secondary,
-    backgroundColor: '#F0F9FF',
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: spacing.xs,
   },
-  areaIcon: {
-    fontSize: 32,
+  taskIconBubble: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: spacing.md,
+  },
+  areaIcon: {
+    fontSize: 26,
   },
   titleInfo: {
     flex: 1,
@@ -408,15 +436,13 @@ const styles = StyleSheet.create({
   },
   taskName: {
     fontWeight: '700',
-    color: colors.text,
     flex: 1,
     marginRight: spacing.xs,
   },
   frequencyChip: {
-    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
   },
   areaText: {
-    color: colors.textSecondary,
     marginTop: 2,
   },
   statusRow: {
@@ -426,32 +452,21 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     paddingTop: spacing.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
   },
   assigneeContainer: {
     flex: 1,
   },
   assigneeLabel: {
-    color: colors.textSecondary,
     fontSize: 11,
   },
   assigneeName: {
     fontWeight: '800',
-    color: colors.text,
-  },
-  myTurnText: {
-    color: colors.secondary,
   },
   dateContainer: {
     alignItems: 'flex-end',
   },
   dueDateText: {
-    color: colors.textSecondary,
     fontWeight: '600',
-  },
-  overdueDateText: {
-    color: colors.error,
-    fontWeight: '800',
   },
   actionRow: {
     flexDirection: 'row',
@@ -460,7 +475,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   doneButton: {
-    borderRadius: borderRadius.md,
+    borderRadius: 18,
   },
   doneButtonLabel: {
     fontWeight: '800',
@@ -469,9 +484,8 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: spacing.lg,
-    bottom: spacing.lg,
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.full,
+    bottom: 80,
+    borderRadius: 28,
   },
   centered: {
     marginTop: spacing.xl,
@@ -480,9 +494,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.xl,
     marginTop: spacing.xl,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.surface,
-    elevation: 1,
+    borderRadius: 20,
+    borderWidth: 1,
   },
   emptyIcon: {
     fontSize: 48,
@@ -490,17 +503,15 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontWeight: '700',
-    color: colors.text,
     marginBottom: spacing.xs,
   },
   emptySubtitle: {
-    color: colors.textSecondary,
     textAlign: 'center',
     paddingHorizontal: spacing.md,
     lineHeight: 20,
   },
   snackbar: {
-    backgroundColor: colors.text,
+    backgroundColor: '#1E293B',
   },
 });
 

@@ -12,7 +12,6 @@ import {
   Card,
   Avatar,
   Chip,
-  Surface,
   Snackbar,
   ActivityIndicator,
 } from 'react-native-paper';
@@ -20,20 +19,17 @@ import { useAuth } from '../../hooks/useAuth';
 import { useGroup } from '../../hooks/useGroup';
 import { useShopping } from '../../hooks/useShopping';
 import { useCleaning } from '../../hooks/useCleaning';
-import { colors, spacing, borderRadius } from '../../constants/theme';
+import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
+import { useLanguageStore } from '../../store/useLanguageStore';
+import { soundService } from '../../services/soundService';
+import { NotificationBell } from '../../components/common/NotificationBell';
 import { GroupMember } from '../../types';
 
-/**
- * Resolves a user ID to a member display name.
- */
 const getMemberName = (uid: string, members: GroupMember[]): string => {
   const member = members.find((m) => m.userId === uid || m.id === uid);
   return member?.displayName || member?.email || 'Membre inconnu';
 };
 
-/**
- * Formats ISO date string to localized readable date.
- */
 const formatDate = (dateValue?: string | Date | null): string => {
   if (!dateValue) return 'Date non définie';
   try {
@@ -47,9 +43,6 @@ const formatDate = (dateValue?: string | Date | null): string => {
   }
 };
 
-/**
- * Determines whether a due date has passed.
- */
 const isOverdue = (dateValue?: string | Date | null): boolean => {
   if (!dateValue) return false;
   try {
@@ -66,11 +59,11 @@ interface DashboardScreenProps {
   };
 }
 
-/**
- * Main dashboard screen displaying group overview, task summaries,
- * and pending chores/purchases directly assigned to the current user.
- */
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) => {
+  const { isDark } = useThemeStore();
+  const tokens = getLiquidGlassTokens(isDark);
+  const { t } = useLanguageStore();
+
   const { user } = useAuth();
   const { group, members, loading: groupLoading } = useGroup();
   const {
@@ -91,21 +84,16 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
 
-  // Check admin privileges
   const isAdmin =
     Boolean(user?.uid) &&
     (group?.adminUid === user?.uid ||
       members.some((m) => (m.userId === user?.uid || m.id === user?.uid) && m.role === 'admin'));
 
-  // Admin name
   const adminMember = members.find(
     (m) => m.userId === group?.adminUid || m.id === group?.adminUid || m.role === 'admin'
   );
   const adminName = adminMember?.displayName || adminMember?.email || 'Admin';
 
-  /**
-   * Refreshes dashboard data feeds.
-   */
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -118,7 +106,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
     }
   }, [fetchProducts, fetchTasks]);
 
-  // Determine user tasks
   const myShoppingTasks = products.filter((p) => {
     if (!p.isActive || !p.rotationOrder || p.rotationOrder.length === 0) return false;
     const currentBuyerId = p.rotationOrder[p.currentTurnIndex % p.rotationOrder.length];
@@ -133,13 +120,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
 
   const totalMyTasks = myShoppingTasks.length + myCleaningTasks.length;
 
-  /**
-   * Quickly marks a shopping item as purchased.
-   */
   const handleMarkPurchased = async (productId: string, productName: string) => {
     setActionLoadingId(productId);
     try {
       await markAsPurchased(productId);
+      soundService.playPurchaseSound();
       setSnackbarMessage(`✓ Achat enregistré : "${productName}" !`);
       setSnackbarVisible(true);
     } catch (err: unknown) {
@@ -152,13 +137,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
     }
   };
 
-  /**
-   * Quickly marks a cleaning task as completed.
-   */
   const handleMarkCleaned = async (taskId: string, taskName: string) => {
     setActionLoadingId(taskId);
     try {
       await markAsDone(taskId);
+      soundService.playTaskCompleteSound();
       setSnackbarMessage(`✓ Tâche validée : "${taskName}" !`);
       setSnackbarVisible(true);
     } catch (err: unknown) {
@@ -174,7 +157,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
   const isLoading = (groupLoading || shoppingLoading || cleaningLoading) && !refreshing;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: tokens.bg }]}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -182,194 +165,271 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            colors={[colors.primary]}
+            colors={[tokens.primary]}
           />
         }
       >
         <View style={styles.contentWrapper}>
-          {/* Header Card with Coloc & Profile shortcut */}
-          <Surface style={styles.headerSurface}>
+          {/* Header Card with Notification Bell */}
+          <View
+            style={[
+              styles.headerSurface,
+              {
+                backgroundColor: tokens.card,
+                borderColor: tokens.border,
+              },
+            ]}
+          >
             <View style={styles.headerRow}>
-              <View style={{ flex: 1, paddingRight: spacing.sm }}>
-                <Text variant="headlineSmall" style={styles.groupName} numberOfLines={1}>
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text variant="headlineSmall" style={[styles.groupName, { color: tokens.primary }]} numberOfLines={1}>
                   {group?.name || 'Ma Colocation'}
                 </Text>
-                <Text variant="bodySmall" style={styles.greetingSub}>
-                  Bonjour {user?.displayName || 'coloc'} 👋
+                <Text variant="bodySmall" style={{ color: tokens.textSecondary, marginTop: 2 }}>
+                  {t('greeting')} {user?.displayName || t('roommate')} 👋
                 </Text>
               </View>
 
-              <TouchableOpacity
-                onPress={() => navigation.navigate('Profile')}
-                activeOpacity={0.8}
-                style={styles.avatarButton}
-              >
-                <Avatar.Text
-                  size={42}
-                  label={(user?.displayName || 'U').charAt(0).toUpperCase()}
-                  style={styles.avatar}
-                />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {/* Notification Bell with red dot */}
+                <NotificationBell />
+
+                <TouchableOpacity
+                  onPress={() => {
+                    soundService.playPopSound();
+                    navigation.navigate('Profile');
+                  }}
+                  activeOpacity={0.8}
+                  style={styles.avatarButton}
+                >
+                  <Avatar.Text
+                    size={38}
+                    label={(user?.displayName || 'U').charAt(0).toUpperCase()}
+                    style={{ backgroundColor: isAdmin ? tokens.adminGold : tokens.primary }}
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
 
-            {/* Admin Badge Banner */}
+            {/* Admin or Member Role Banner */}
             <View style={styles.roleBannerRow}>
-              <Surface
+              <View
                 style={[
                   styles.roleBanner,
-                  isAdmin ? styles.adminBanner : styles.memberBanner,
+                  {
+                    backgroundColor: isAdmin ? 'rgba(255, 214, 10, 0.16)' : 'rgba(150, 150, 150, 0.12)',
+                    borderColor: isAdmin ? tokens.adminGold : tokens.border,
+                  },
                 ]}
               >
                 <Text
                   style={[
                     styles.roleBannerText,
-                    isAdmin ? styles.adminBannerText : styles.memberBannerText,
+                    { color: isAdmin ? (isDark ? '#FDE68A' : '#B45309') : tokens.textSecondary },
                   ]}
                 >
                   {isAdmin
-                    ? "👑 Vous êtes Administrateur"
-                    : `👤 Colocataire (Admin : ${adminName})`}
+                    ? t('adminBadge')
+                    : `${t('memberBadge')} (Admin : ${adminName})`}
                 </Text>
-              </Surface>
+              </View>
             </View>
-          </Surface>
+          </View>
 
           {/* Admin Quick Action Hub */}
           {isAdmin && (
-            <Surface style={styles.adminHubCard}>
+            <View
+              style={[
+                styles.adminHubCard,
+                {
+                  backgroundColor: isDark ? 'rgba(255, 214, 10, 0.08)' : 'rgba(255, 214, 10, 0.1)',
+                  borderColor: tokens.adminGold,
+                },
+              ]}
+            >
               <View style={styles.adminHubHeader}>
-                <Text style={{ fontSize: 18, marginRight: spacing.xs }}>⚡</Text>
-                <Text style={styles.adminHubTitle}>Actions Rapides Admin</Text>
+                <Text style={{ fontSize: 18, marginRight: 6 }}>⚡</Text>
+                <Text style={[styles.adminHubTitle, { color: isDark ? '#FDE68A' : '#B45309' }]}>
+                  {t('adminQuickActions')}
+                </Text>
               </View>
               <View style={styles.adminHubButtons}>
                 <Button
                   mode="contained"
-                  buttonColor={colors.primary}
+                  buttonColor={tokens.primary}
+                  textColor="#FFFFFF"
                   compact
                   style={styles.hubBtn}
                   labelStyle={styles.hubBtnLabel}
-                  onPress={() => navigation.navigate('Shopping', { screen: 'AddProduct' })}
+                  onPress={() => {
+                    soundService.playPopSound();
+                    navigation.navigate('Shopping', { screen: 'AddProduct' });
+                  }}
                 >
-                  + Produit
+                  {t('newProduct')}
                 </Button>
                 <Button
                   mode="contained"
-                  buttonColor={colors.secondary}
+                  buttonColor={tokens.secondary}
+                  textColor="#FFFFFF"
                   compact
                   style={styles.hubBtn}
                   labelStyle={styles.hubBtnLabel}
-                  onPress={() => navigation.navigate('Cleaning', { screen: 'AddCleaningTask' })}
+                  onPress={() => {
+                    soundService.playPopSound();
+                    navigation.navigate('Cleaning', { screen: 'AddCleaningTask' });
+                  }}
                 >
-                  + Ménage
+                  {t('newChore')}
                 </Button>
                 <Button
                   mode="outlined"
                   compact
-                  style={[styles.hubBtn, styles.hubBtnOutline]}
+                  textColor={tokens.primary}
+                  style={[styles.hubBtn, { borderColor: tokens.border }]}
                   labelStyle={styles.hubBtnLabel}
-                  onPress={() => navigation.navigate('Profile', { screen: 'ManageMembers' })}
+                  onPress={() => {
+                    soundService.playPopSound();
+                    navigation.navigate('Profile', { screen: 'ManageMembers' });
+                  }}
                 >
-                  👥 Membres
+                  {t('membersBtn')}
                 </Button>
               </View>
-            </Surface>
+            </View>
           )}
 
           {/* Global Summary Cards */}
           <View style={styles.summaryContainer}>
-            <Card
-              style={[styles.summaryCard, styles.shoppingSummaryCard]}
-              onPress={() => navigation.navigate('Shopping')}
-              mode="elevated"
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                soundService.playPopSound();
+                navigation.navigate('Shopping');
+              }}
+              style={[
+                styles.summaryCard,
+                {
+                  backgroundColor: isDark ? 'rgba(48, 209, 88, 0.14)' : '#ECFDF5',
+                  borderColor: isDark ? 'rgba(48, 209, 88, 0.3)' : '#A7F3D0',
+                },
+              ]}
             >
-              <Card.Content style={styles.summaryCardContent}>
-                <Text style={styles.summaryIcon}>🛒</Text>
-                <View style={{ flex: 1 }}>
-                  <Text variant="headlineMedium" style={styles.summaryNumber}>
-                    {myShoppingTasks.length}
-                  </Text>
-                  <Text variant="bodySmall" style={styles.summaryLabel} numberOfLines={1}>
-                    {myShoppingTasks.length > 1 ? 'Courses à faire' : 'Course à faire'}
-                  </Text>
-                </View>
-              </Card.Content>
-            </Card>
+              <Text style={styles.summaryIcon}>🛒</Text>
+              <View style={{ flex: 1 }}>
+                <Text variant="headlineMedium" style={[styles.summaryNumber, { color: tokens.text }]}>
+                  {myShoppingTasks.length}
+                </Text>
+                <Text variant="bodySmall" style={{ color: tokens.textSecondary, fontWeight: '700' }} numberOfLines={1}>
+                  {myShoppingTasks.length > 1 ? t('groceriesPlural') : t('groceriesToDo')}
+                </Text>
+              </View>
+            </TouchableOpacity>
 
-            <Card
-              style={[styles.summaryCard, styles.cleaningSummaryCard]}
-              onPress={() => navigation.navigate('Cleaning')}
-              mode="elevated"
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                soundService.playPopSound();
+                navigation.navigate('Cleaning');
+              }}
+              style={[
+                styles.summaryCard,
+                {
+                  backgroundColor: isDark ? 'rgba(10, 132, 255, 0.14)' : '#F0F9FF',
+                  borderColor: isDark ? 'rgba(10, 132, 255, 0.3)' : '#BAE6FD',
+                },
+              ]}
             >
-              <Card.Content style={styles.summaryCardContent}>
-                <Text style={styles.summaryIcon}>🧹</Text>
-                <View style={{ flex: 1 }}>
-                  <Text variant="headlineMedium" style={styles.summaryNumber}>
-                    {myCleaningTasks.length}
-                  </Text>
-                  <Text variant="bodySmall" style={styles.summaryLabel} numberOfLines={1}>
-                    {myCleaningTasks.length > 1 ? 'Ménages prévus' : 'Ménage prévu'}
-                  </Text>
-                </View>
-              </Card.Content>
-            </Card>
+              <Text style={styles.summaryIcon}>🧹</Text>
+              <View style={{ flex: 1 }}>
+                <Text variant="headlineMedium" style={[styles.summaryNumber, { color: tokens.text }]}>
+                  {myCleaningTasks.length}
+                </Text>
+                <Text variant="bodySmall" style={{ color: tokens.textSecondary, fontWeight: '700' }} numberOfLines={1}>
+                  {myCleaningTasks.length > 1 ? t('cleaningScheduledPlural') : t('cleaningScheduled')}
+                </Text>
+              </View>
+            </TouchableOpacity>
           </View>
 
           {/* My Tasks Section Header */}
           <View style={styles.sectionHeader}>
-            <Text variant="titleMedium" style={styles.sectionTitle}>
-              Tes tours en attente
+            <Text variant="titleMedium" style={[styles.sectionTitle, { color: tokens.text }]}>
+              {t('pendingTurns')}
             </Text>
             {totalMyTasks > 0 && (
-              <Chip compact style={styles.counterChip} textStyle={{ color: '#FFFFFF', fontWeight: '800' }}>
+              <Chip
+                compact
+                style={{ backgroundColor: tokens.primary, borderRadius: 12 }}
+                textStyle={{ color: '#FFFFFF', fontWeight: '800' }}
+              >
                 {totalMyTasks}
               </Chip>
             )}
           </View>
 
           {isLoading ? (
-            <ActivityIndicator style={styles.centered} size="large" color={colors.primary} />
+            <ActivityIndicator style={{ marginTop: 32 }} size="large" color={tokens.primary} />
           ) : totalMyTasks === 0 ? (
-            <Surface style={styles.emptyStateCard}>
-              <Text style={styles.emptyEmoji}>🎉</Text>
-              <Text variant="titleMedium" style={styles.emptyTitle}>
-                Tout est à jour !
+            <View
+              style={[
+                styles.emptyStateCard,
+                {
+                  backgroundColor: tokens.card,
+                  borderColor: tokens.border,
+                },
+              ]}
+            >
+              <Text style={{ fontSize: 44, marginBottom: 8 }}>🎉</Text>
+              <Text variant="titleMedium" style={{ fontWeight: '800', color: tokens.text }}>
+                {t('allUpToDate')}
               </Text>
-              <Text variant="bodySmall" style={styles.emptySubtitle}>
-                Aucune corvée ni course ne repose sur toi actuellement.
+              <Text variant="bodySmall" style={{ color: tokens.textSecondary, textAlign: 'center', marginTop: 4 }}>
+                {t('allUpToDateSub')}
               </Text>
-            </Surface>
+            </View>
           ) : (
             <View style={styles.tasksList}>
               {/* My Shopping Items */}
               {myShoppingTasks.map((item) => {
                 const isActionRunning = actionLoadingId === item.id;
                 return (
-                  <Surface key={`shop-${item.id}`} style={styles.taskCard}>
+                  <View
+                    key={`shop-${item.id}`}
+                    style={[
+                      styles.taskCard,
+                      {
+                        backgroundColor: tokens.card,
+                        borderColor: tokens.border,
+                      },
+                    ]}
+                  >
                     <View style={styles.taskCardContent}>
                       <View style={styles.taskLeft}>
                         <Text style={styles.taskIcon}>{item.icon || '📦'}</Text>
                         <View style={styles.taskInfo}>
-                          <Text variant="titleMedium" style={styles.taskTitle}>
+                          <Text variant="titleMedium" style={[styles.taskTitle, { color: tokens.text }]}>
                             {item.name}
                           </Text>
-                          <Text variant="bodySmall" style={styles.taskTagShop}>
-                            🛒 C'est votre tour d'acheter
+                          <Text variant="bodySmall" style={{ color: tokens.success, fontWeight: '700', marginTop: 2 }}>
+                            🛒 {t('yourTurnToBuy')}
                           </Text>
                         </View>
                       </View>
                       <Button
                         mode="contained"
-                        buttonColor={colors.success}
+                        buttonColor={tokens.success}
+                        textColor="#FFFFFF"
                         loading={isActionRunning}
                         disabled={isActionRunning}
                         onPress={() => handleMarkPurchased(item.id, item.name)}
                         style={styles.doneButton}
                         labelStyle={styles.doneButtonLabel}
                       >
-                        Acheté ✓
+                        {t('bought')}
                       </Button>
                     </View>
-                  </Surface>
+                  </View>
                 );
               })}
 
@@ -378,42 +438,53 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
                 const overdue = isOverdue(task.nextDueDate);
                 const isActionRunning = actionLoadingId === task.id;
                 return (
-                  <Surface
+                  <View
                     key={`clean-${task.id}`}
-                    style={[styles.taskCard, overdue && styles.overdueBorder]}
+                    style={[
+                      styles.taskCard,
+                      {
+                        backgroundColor: tokens.card,
+                        borderColor: overdue ? tokens.error : tokens.border,
+                      },
+                    ]}
                   >
                     <View style={styles.taskCardContent}>
                       <View style={styles.taskLeft}>
                         <Text style={styles.taskIcon}>🧹</Text>
                         <View style={styles.taskInfo}>
-                          <Text variant="titleMedium" style={styles.taskTitle}>
+                          <Text variant="titleMedium" style={[styles.taskTitle, { color: tokens.text }]}>
                             {task.name}
                           </Text>
-                          <Text variant="bodySmall" style={styles.taskArea}>
-                            Zone : {task.area}
+                          <Text variant="bodySmall" style={{ color: tokens.textSecondary, marginTop: 2 }}>
+                            {t('areaLabel')} : {task.area}
                           </Text>
                           <Text
                             variant="labelSmall"
-                            style={[styles.dueDateText, overdue && styles.overdueText]}
+                            style={{
+                              color: overdue ? tokens.error : tokens.textSecondary,
+                              fontWeight: overdue ? '800' : '600',
+                              marginTop: 2,
+                            }}
                           >
-                            {overdue ? '⚠️ En retard ! Échéance : ' : '📅 Échéance : '}
+                            {overdue ? t('overdue') + ' ' : `📅 ${t('dueDate')} `}
                             {formatDate(task.nextDueDate)}
                           </Text>
                         </View>
                       </View>
                       <Button
                         mode="contained"
-                        buttonColor={colors.primary}
+                        buttonColor={overdue ? tokens.error : tokens.primary}
+                        textColor="#FFFFFF"
                         loading={isActionRunning}
                         disabled={isActionRunning}
                         onPress={() => handleMarkCleaned(task.id, task.name)}
                         style={styles.doneButton}
                         labelStyle={styles.doneButtonLabel}
                       >
-                        Fait ✓
+                        {t('done')}
                       </Button>
                     </View>
-                  </Surface>
+                  </View>
                 );
               })}
             </View>
@@ -429,7 +500,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
           setSnackbarMessage(null);
         }}
         duration={3000}
-        style={styles.snackbar}
+        style={{ backgroundColor: tokens.text }}
       >
         {snackbarMessage || ''}
       </Snackbar>
@@ -440,29 +511,27 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   scrollContent: {
-    paddingBottom: spacing.xl * 2,
+    paddingBottom: 110, // space for floating bottom bar
   },
   contentWrapper: {
     width: '100%',
     maxWidth: 600,
     alignSelf: 'center',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: 16,
   },
   headerSurface: {
-    backgroundColor: colors.surface,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.lg,
-    marginTop: spacing.md,
-    elevation: 2,
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.05,
+    paddingTop: 20,
+    paddingBottom: 14,
+    paddingHorizontal: 16,
+    borderRadius: 26,
+    marginTop: 14,
+    borderWidth: 1.2,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 10,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
   },
   headerRow: {
     flexDirection: 'row',
@@ -470,233 +539,134 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   groupName: {
-    fontWeight: '800',
-    color: colors.primary,
-  },
-  greetingSub: {
-    color: colors.textSecondary,
-    marginTop: 2,
+    fontWeight: '900',
+    letterSpacing: -0.4,
   },
   avatarButton: {
     padding: 2,
-  },
-  avatar: {
-    backgroundColor: colors.primary,
+    marginLeft: 8,
   },
   roleBannerRow: {
-    marginTop: spacing.sm,
+    marginTop: 8,
   },
   roleBanner: {
-    paddingHorizontal: spacing.sm + 4,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 16,
     alignSelf: 'flex-start',
-    elevation: 0,
+    borderWidth: 1,
   },
   roleBannerText: {
-    fontSize: 12,
-  },
-  adminBanner: {
-    backgroundColor: '#FEF3C7',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  adminBannerText: {
-    color: '#B45309',
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  memberBanner: {
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  memberBannerText: {
-    color: colors.textSecondary,
-    fontWeight: '600',
+    fontWeight: '800',
     fontSize: 12,
   },
   adminHubCard: {
-    backgroundColor: '#EEF2FF',
-    marginTop: spacing.md,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: '#C7D2FE',
-    elevation: 1,
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 22,
+    borderWidth: 1.2,
   },
   adminHubHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.xs + 2,
+    marginBottom: 6,
   },
   adminHubTitle: {
-    fontWeight: '800',
-    color: colors.primary,
-    fontSize: 14,
+    fontWeight: '900',
+    fontSize: 13,
   },
   adminHubButtons: {
     flexDirection: 'row',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
+    gap: 8,
+    marginTop: 4,
   },
   hubBtn: {
     flex: 1,
-    borderRadius: borderRadius.md,
-  },
-  hubBtnOutline: {
-    borderColor: colors.primary,
+    borderRadius: 16,
   },
   hubBtnLabel: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
     marginHorizontal: 0,
   },
   summaryContainer: {
     flexDirection: 'row',
-    marginTop: spacing.md,
-    gap: spacing.sm,
+    marginTop: 14,
+    gap: 10,
   },
   summaryCard: {
     flex: 1,
-    borderRadius: borderRadius.lg,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  shoppingSummaryCard: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#A7F3D0',
-  },
-  cleaningSummaryCard: {
-    backgroundColor: '#F0F9FF',
-    borderColor: '#BAE6FD',
-  },
-  summaryCardContent: {
+    borderRadius: 22,
+    borderWidth: 1.2,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.sm,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
   },
   summaryIcon: {
-    fontSize: 32,
-    marginRight: spacing.sm,
+    fontSize: 30,
+    marginRight: 10,
   },
   summaryNumber: {
-    fontWeight: '800',
-    color: colors.text,
-  },
-  summaryLabel: {
-    color: colors.textSecondary,
-    fontWeight: '600',
-    fontSize: 12,
+    fontWeight: '900',
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.xs,
+    marginTop: 22,
+    marginBottom: 10,
+    paddingHorizontal: 4,
   },
   sectionTitle: {
-    fontWeight: '800',
-    color: colors.text,
-  },
-  counterChip: {
-    backgroundColor: colors.primary,
+    fontWeight: '900',
   },
   emptyStateCard: {
-    marginTop: spacing.xs,
-    padding: spacing.xl,
+    marginTop: 4,
+    padding: 28,
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    elevation: 1,
-  },
-  emptyEmoji: {
-    fontSize: 48,
-    marginBottom: spacing.xs,
-  },
-  emptyTitle: {
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  emptySubtitle: {
-    color: colors.textSecondary,
-    textAlign: 'center',
+    borderRadius: 26,
+    borderWidth: 1.2,
   },
   tasksList: {
-    gap: spacing.sm,
+    gap: 10,
   },
   taskCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    elevation: 1,
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.04,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 6,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  overdueBorder: {
-    borderColor: colors.error,
-    borderWidth: 1.5,
+    borderRadius: 22,
+    borderWidth: 1.2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
   },
   taskCardContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: spacing.md,
+    padding: 14,
   },
   taskLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    marginRight: spacing.sm,
+    marginRight: 10,
   },
   taskIcon: {
     fontSize: 28,
-    marginRight: spacing.sm,
+    marginRight: 12,
   },
   taskInfo: {
     flex: 1,
   },
   taskTitle: {
-    fontWeight: '700',
-    color: colors.text,
-  },
-  taskTagShop: {
-    color: colors.success,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  taskArea: {
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  dueDateText: {
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  overdueText: {
-    color: colors.error,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   doneButton: {
-    borderRadius: borderRadius.md,
+    borderRadius: 16,
   },
   doneButtonLabel: {
     fontSize: 12,
-    fontWeight: '700',
-  },
-  centered: {
-    marginTop: spacing.xl,
-  },
-  snackbar: {
-    backgroundColor: colors.text,
+    fontWeight: '800',
   },
 });
 

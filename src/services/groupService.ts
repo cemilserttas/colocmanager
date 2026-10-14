@@ -176,8 +176,10 @@ export const groupService = {
   ): Promise<{ group: Group; member: GroupMember } | null> {
     if (isDemoMode()) {
       const group = await mockStorage.getGroup();
+      if (!group) return null;
       const members = await mockStorage.getMembers();
-      return group ? { group, member: members[0] } : null;
+      const member = members.find((m) => m.userId === userId || m.id === userId);
+      return member ? { group, member } : null;
     }
     try {
       const membersQuery = query(
@@ -187,18 +189,14 @@ export const groupService = {
       );
       const querySnap = await getDocs(membersQuery);
       if (querySnap.empty) {
-        return {
-          group: (await mockStorage.getGroup())!,
-          member: (await mockStorage.getMembers())[0],
-        };
+        return null;
       }
       const member = querySnap.docs[0].data() as GroupMember;
       const group = await groupService.getGroup(member.groupId);
       return group ? { group, member } : null;
-    } catch {
-      const group = await mockStorage.getGroup();
-      const members = await mockStorage.getMembers();
-      return group ? { group, member: members[0] } : null;
+    } catch (err) {
+      console.warn('Error fetching user group in Firestore:', err);
+      return null;
     }
   },
 
@@ -223,12 +221,37 @@ export const groupService = {
       if (group) {
         group.adminUid = newAdminUid;
         await mockStorage.setGroup(group);
+        const members = await mockStorage.getMembers();
+        const updated = members.map((m) => {
+          if (m.userId === newAdminUid || m.id === newAdminUid) {
+            return { ...m, role: 'admin' as const };
+          }
+          if (m.role === 'admin') {
+            return { ...m, role: 'member' as const };
+          }
+          return m;
+        });
+        await mockStorage.setMembers(updated);
         groupSubscribers.forEach((cb) => cb(group));
+        memberSubscribers.forEach((cb) => cb(updated));
       }
       return;
     }
     try {
-      await updateDoc(doc(db, 'groups', groupId), { adminUid: newAdminUid });
+      const batch = writeBatch(db);
+      const groupRef = doc(db, 'groups', groupId);
+      batch.update(groupRef, { adminUid: newAdminUid });
+
+      const membersSnap = await getDocs(collection(db, 'groups', groupId, 'members'));
+      membersSnap.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data.userId === newAdminUid || docSnap.id === newAdminUid) {
+          batch.update(docSnap.ref, { role: 'admin' });
+        } else if (data.role === 'admin') {
+          batch.update(docSnap.ref, { role: 'member' });
+        }
+      });
+      await batch.commit();
     } catch (error: any) {
       console.warn('Firebase error in transferAdmin:', error);
     }

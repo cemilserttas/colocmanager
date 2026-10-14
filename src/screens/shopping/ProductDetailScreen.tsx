@@ -7,7 +7,6 @@ import {
 import {
   Text,
   Button,
-  Surface,
   Dialog,
   Portal,
   Snackbar,
@@ -19,6 +18,9 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { useGroup } from '../../hooks/useGroup';
 import { useShopping } from '../../hooks/useShopping';
+import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
+import { useLanguageStore } from '../../store/useLanguageStore';
+import { soundService } from '../../services/soundService';
 import { colors, spacing, borderRadius } from '../../constants/theme';
 import { PurchaseRecord, GroupMember } from '../../types';
 
@@ -69,6 +71,10 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
   route,
   navigation,
 }) => {
+  const { isDark } = useThemeStore();
+  const tokens = getLiquidGlassTokens(isDark);
+  const { t } = useLanguageStore();
+
   const { productId } = route.params;
   const { user } = useAuth();
   const { group, members } = useGroup();
@@ -127,6 +133,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
 
   // Open reorder dialog
   const handleOpenReorder = () => {
+    soundService.playPopSound();
     if (product) {
       setTempOrder([...(product.rotationOrder || [])]);
       setReorderDialogVisible(true);
@@ -135,6 +142,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
 
   // Move member up in order
   const moveUp = (index: number) => {
+    soundService.playPopSound();
     if (index <= 0) return;
     const newOrder = [...tempOrder];
     const item = newOrder[index];
@@ -145,6 +153,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
 
   // Move member down in order
   const moveDown = (index: number) => {
+    soundService.playPopSound();
     if (index >= tempOrder.length - 1) return;
     const newOrder = [...tempOrder];
     const item = newOrder[index];
@@ -155,6 +164,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
 
   // Save new rotation order
   const handleSaveOrder = async () => {
+    soundService.playPopSound();
     if (!product || !updateRotationOrder) {
       setReorderDialogVisible(false);
       return;
@@ -163,6 +173,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
     try {
       await updateRotationOrder(product.id, tempOrder);
       setReorderDialogVisible(false);
+      soundService.playSuccessSound();
       setSnackbarMessage("L'ordre de rotation a été mis à jour.");
       setSnackbarVisible(true);
     } catch (err: unknown) {
@@ -177,6 +188,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
 
   // Delete product
   const handleDeleteProduct = async () => {
+    soundService.playPopSound();
     if (!product) return;
     setDeleting(true);
     try {
@@ -207,19 +219,22 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
   const currentTurnIndex = product.currentTurnIndex % (rotationList.length || 1);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: tokens.bg }]}>
       <View style={styles.contentWrapper}>
         {/* Header */}
-        <View style={styles.topBar}>
+        <View style={[styles.topBar, { backgroundColor: tokens.surface, borderBottomColor: tokens.border }]}>
           <Button
             mode="text"
-            onPress={() => navigation.goBack()}
+            onPress={() => {
+              soundService.playPopSound();
+              navigation.goBack();
+            }}
             style={{ margin: 0 }}
-            labelStyle={{ fontSize: 16 }}
+            labelStyle={{ fontSize: 16, color: tokens.accent, fontWeight: '700' }}
           >
             ← Retour
           </Button>
-          <Text variant="titleMedium" style={styles.screenTitle} numberOfLines={1}>
+          <Text variant="titleMedium" style={[styles.screenTitle, { color: tokens.text }]} numberOfLines={1}>
             {product.name}
           </Text>
           <View style={{ width: 60 }} />
@@ -227,29 +242,31 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {/* Product Banner */}
-          <Surface style={styles.bannerSurface}>
-            <Text style={styles.bannerIcon}>{product.icon || '🛒'}</Text>
-            <Text variant="headlineSmall" style={styles.bannerName}>
+          <View style={[styles.bannerSurface, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <View style={[styles.bannerIconBubble, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)' }]}>
+              <Text style={styles.bannerIcon}>{product.icon || '🛒'}</Text>
+            </View>
+            <Text variant="headlineSmall" style={[styles.bannerName, { color: tokens.text }]}>
               {product.name}
             </Text>
-            <Chip style={styles.rotationChip} textStyle={{ color: '#065F46', fontWeight: '700' }}>
+            <Chip style={[styles.rotationChip, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.16)' : '#ECFDF5' }]} textStyle={{ color: '#10B981', fontWeight: '700' }}>
               🔄 {rotationList.length} colocataires en rotation
             </Chip>
-          </Surface>
+          </View>
 
           {/* Rotation Order Section */}
           <View style={styles.sectionHeaderRow}>
-            <Text variant="titleMedium" style={styles.sectionTitle}>
+            <Text variant="titleMedium" style={[styles.sectionTitle, { color: tokens.text }]}>
               Ordre de passage
             </Text>
             {isAdmin && (
-              <Button mode="text" onPress={handleOpenReorder} style={styles.editButton}>
+              <Button mode="text" onPress={handleOpenReorder} textColor={tokens.accent} style={styles.editButton}>
                 Modifier l'ordre
               </Button>
             )}
           </View>
 
-          <Surface style={styles.rotationCard}>
+          <View style={[styles.rotationCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
             {rotationList.map((uid, index) => {
               const isCurrent = index === currentTurnIndex;
               const memberName = getMemberName(uid, members);
@@ -257,11 +274,21 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
 
               return (
                 <React.Fragment key={`rotation-${uid}-${index}`}>
-                  <View style={[styles.rotationRow, isCurrent && styles.activeRotationRow]}>
+                  <View
+                    style={[
+                      styles.rotationRow,
+                      isCurrent && {
+                        backgroundColor: isDark ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.08)',
+                      },
+                    ]}
+                  >
                     <View style={styles.rotationOrderBadge}>
                       <Text
                         variant="labelLarge"
-                        style={[styles.rotationOrderNumber, isCurrent && styles.activeOrderNumber]}
+                        style={[
+                          styles.rotationOrderNumber,
+                          { color: isCurrent ? '#10B981' : tokens.textSecondary },
+                        ]}
                       >
                         {index + 1}
                       </Text>
@@ -269,12 +296,18 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
                     <Avatar.Text
                       size={36}
                       label={memberName.charAt(0).toUpperCase()}
-                      style={[styles.memberAvatar, isCurrent && styles.activeAvatar]}
+                      style={[
+                        styles.memberAvatar,
+                        { backgroundColor: isCurrent ? '#10B981' : tokens.accent },
+                      ]}
                     />
                     <View style={styles.memberNameContainer}>
                       <Text
                         variant="titleSmall"
-                        style={[styles.memberNameText, isCurrent && styles.activeMemberName]}
+                        style={[
+                          styles.memberNameText,
+                          { color: isCurrent ? '#10B981' : tokens.text },
+                        ]}
                       >
                         {memberName} {isSelf ? '(Vous)' : ''}
                       </Text>
@@ -285,25 +318,25 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
                       )}
                     </View>
                   </View>
-                  {index < rotationList.length - 1 && <Divider />}
+                  {index < rotationList.length - 1 && <Divider style={{ backgroundColor: tokens.border }} />}
                 </React.Fragment>
               );
             })}
-          </Surface>
+          </View>
 
           {/* Purchase History Section */}
           <View style={styles.sectionHeaderRow}>
-            <Text variant="titleMedium" style={styles.sectionTitle}>
+            <Text variant="titleMedium" style={[styles.sectionTitle, { color: tokens.text }]}>
               Historique des achats
             </Text>
           </View>
 
-          <Surface style={styles.historyCard}>
+          <View style={[styles.historyCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
             {historyLoading ? (
-              <ActivityIndicator style={styles.centered} size="small" color={colors.primary} />
+              <ActivityIndicator style={styles.centered} size="small" color={tokens.accent} />
             ) : history.length === 0 ? (
               <View style={styles.emptyHistory}>
-                <Text variant="bodyMedium" style={styles.emptyHistoryText}>
+                <Text variant="bodyMedium" style={[styles.emptyHistoryText, { color: tokens.textSecondary }]}>
                   {product.lastPurchasedAt
                     ? `Dernier achat enregistré le ${formatDate(product.lastPurchasedAt)} par ${
                         product.lastPurchasedBy ? getMemberName(product.lastPurchasedBy, members) : 'un coloc'
@@ -317,27 +350,30 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
                   <View style={styles.historyRow}>
                     <Text style={{ fontSize: 20, marginRight: spacing.sm }}>✅</Text>
                     <View style={styles.historyDetails}>
-                      <Text variant="bodyMedium" style={styles.historyBuyer}>
+                      <Text variant="bodyMedium" style={[styles.historyBuyer, { color: tokens.text }]}>
                         Acheté par {getMemberName(record.buyerUid, members)}
                       </Text>
-                      <Text variant="bodySmall" style={styles.historyDate}>
+                      <Text variant="bodySmall" style={[styles.historyDate, { color: tokens.textSecondary }]}>
                         {formatDate(record.purchasedAt)}
                       </Text>
                     </View>
                   </View>
-                  {idx < history.length - 1 && <Divider />}
+                  {idx < history.length - 1 && <Divider style={{ backgroundColor: tokens.border }} />}
                 </React.Fragment>
               ))
             )}
-          </Surface>
+          </View>
 
           {/* Admin Delete Action */}
           {isAdmin && (
             <Button
               mode="outlined"
-              textColor={colors.error}
-              style={styles.deleteButton}
-              onPress={() => setDeleteDialogVisible(true)}
+              textColor="#EF4444"
+              style={[styles.deleteButton, { borderColor: 'rgba(239, 68, 68, 0.4)' }]}
+              onPress={() => {
+                soundService.playPopSound();
+                setDeleteDialogVisible(true);
+              }}
             >
               🗑️ Supprimer ce produit
             </Button>
@@ -347,10 +383,14 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
 
       {/* Reorder Dialog */}
       <Portal>
-        <Dialog visible={reorderDialogVisible} onDismiss={() => setReorderDialogVisible(false)}>
-          <Dialog.Title>Modifier l'ordre de passage</Dialog.Title>
+        <Dialog
+          visible={reorderDialogVisible}
+          onDismiss={() => setReorderDialogVisible(false)}
+          style={{ backgroundColor: tokens.card, borderRadius: 24, borderWidth: 1, borderColor: tokens.border }}
+        >
+          <Dialog.Title style={{ color: tokens.text, fontWeight: '800' }}>Modifier l'ordre de passage</Dialog.Title>
           <Dialog.Content>
-            <Text variant="bodySmall" style={styles.dialogDescription}>
+            <Text variant="bodySmall" style={[styles.dialogDescription, { color: tokens.textSecondary }]}>
               Utilisez les boutons monter / descendre pour réorganiser l'ordre d'achat :
             </Text>
             <ScrollView style={styles.dialogList}>
@@ -358,10 +398,10 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
                 const name = getMemberName(uid, members);
                 return (
                   <View key={`reorder-${uid}-${idx}`} style={styles.reorderRow}>
-                    <Text variant="labelLarge" style={styles.reorderIndex}>
+                    <Text variant="labelLarge" style={[styles.reorderIndex, { color: tokens.textSecondary }]}>
                       {idx + 1}.
                     </Text>
-                    <Text variant="bodyMedium" style={styles.reorderName} numberOfLines={1}>
+                    <Text variant="bodyMedium" style={[styles.reorderName, { color: tokens.text }]} numberOfLines={1}>
                       {name}
                     </Text>
                     <View style={styles.reorderArrows}>
@@ -370,6 +410,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
                         compact
                         disabled={idx === 0}
                         onPress={() => moveUp(idx)}
+                        textColor={tokens.accent}
                       >
                         ▲
                       </Button>
@@ -378,6 +419,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
                         compact
                         disabled={idx === tempOrder.length - 1}
                         onPress={() => moveDown(idx)}
+                        textColor={tokens.accent}
                       >
                         ▼
                       </Button>
@@ -388,12 +430,13 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
             </ScrollView>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setReorderDialogVisible(false)}>Annuler</Button>
+            <Button onPress={() => setReorderDialogVisible(false)} textColor={tokens.textSecondary}>Annuler</Button>
             <Button
               mode="contained"
-              buttonColor={colors.primary}
+              buttonColor={tokens.accent}
               onPress={handleSaveOrder}
               loading={savingOrder}
+              style={{ borderRadius: 16 }}
             >
               Enregistrer
             </Button>
@@ -401,17 +444,21 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
         </Dialog>
 
         {/* Delete Confirmation Dialog */}
-        <Dialog visible={deleteDialogVisible} onDismiss={() => setDeleteDialogVisible(false)}>
-          <Dialog.Title>Supprimer le produit</Dialog.Title>
+        <Dialog
+          visible={deleteDialogVisible}
+          onDismiss={() => setDeleteDialogVisible(false)}
+          style={{ backgroundColor: tokens.card, borderRadius: 24, borderWidth: 1, borderColor: tokens.border }}
+        >
+          <Dialog.Title style={{ color: tokens.text, fontWeight: '800' }}>Supprimer le produit</Dialog.Title>
           <Dialog.Content>
-            <Text variant="bodyMedium">
+            <Text variant="bodyMedium" style={{ color: tokens.textSecondary }}>
               Voulez-vous vraiment supprimer définitivement "{product.name}" de la colocation ?
             </Text>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setDeleteDialogVisible(false)}>Annuler</Button>
+            <Button onPress={() => setDeleteDialogVisible(false)} textColor={tokens.textSecondary}>Annuler</Button>
             <Button
-              textColor={colors.error}
+              textColor="#EF4444"
               onPress={handleDeleteProduct}
               loading={deleting}
             >
@@ -440,7 +487,6 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   contentWrapper: {
     flex: 1,
@@ -460,39 +506,43 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    elevation: 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   screenTitle: {
     fontWeight: '800',
-    color: colors.text,
     flex: 1,
     textAlign: 'center',
+    fontSize: 18,
   },
   scrollContent: {
     padding: spacing.md,
-    paddingBottom: spacing.xl * 2,
+    paddingBottom: spacing.xl * 3,
   },
   bannerSurface: {
     alignItems: 'center',
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    elevation: 2,
+    borderRadius: 24,
+    borderWidth: 1,
     marginBottom: spacing.md,
   },
-  bannerIcon: {
-    fontSize: 52,
+  bannerIconBubble: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: spacing.xs,
+  },
+  bannerIcon: {
+    fontSize: 40,
   },
   bannerName: {
     fontWeight: '800',
-    color: colors.text,
     marginBottom: spacing.xs,
   },
   rotationChip: {
-    backgroundColor: '#ECFDF5',
+    borderRadius: 16,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -504,18 +554,14 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontWeight: '800',
-    color: colors.text,
   },
   editButton: {
     margin: 0,
   },
   rotationCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    elevation: 1,
+    borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.border,
   },
   rotationRow: {
     flexDirection: 'row',
@@ -523,57 +569,37 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
   },
-  activeRotationRow: {
-    backgroundColor: '#F0FDF4',
-  },
   rotationOrderBadge: {
     width: 28,
     alignItems: 'center',
   },
   rotationOrderNumber: {
     fontWeight: '800',
-    color: colors.textSecondary,
-  },
-  activeOrderNumber: {
-    color: colors.success,
   },
   memberAvatar: {
-    backgroundColor: colors.primary,
     marginRight: spacing.sm,
-  },
-  activeAvatar: {
-    backgroundColor: colors.success,
   },
   memberNameContainer: {
     flex: 1,
   },
   memberNameText: {
     fontWeight: '700',
-    color: colors.text,
-  },
-  activeMemberName: {
-    color: colors.success,
-    fontWeight: '800',
   },
   currentTurnBadge: {
-    color: colors.success,
+    color: '#10B981',
     fontWeight: '700',
     marginTop: 2,
   },
   historyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    elevation: 1,
+    borderRadius: 20,
     paddingVertical: spacing.xs,
     borderWidth: 1,
-    borderColor: colors.border,
   },
   emptyHistory: {
     padding: spacing.md,
     alignItems: 'center',
   },
   emptyHistoryText: {
-    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -588,19 +614,16 @@ const styles = StyleSheet.create({
   },
   historyBuyer: {
     fontWeight: '700',
-    color: colors.text,
   },
   historyDate: {
-    color: colors.textSecondary,
     marginTop: 2,
+    fontSize: 12,
   },
   deleteButton: {
     marginTop: spacing.xl,
-    borderColor: colors.error,
-    borderRadius: borderRadius.md,
+    borderRadius: 20,
   },
   dialogDescription: {
-    color: colors.textSecondary,
     marginBottom: spacing.sm,
   },
   dialogList: {
@@ -613,7 +636,6 @@ const styles = StyleSheet.create({
   },
   reorderIndex: {
     width: 24,
-    color: colors.textSecondary,
     fontWeight: '700',
   },
   reorderName: {
@@ -627,7 +649,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   snackbar: {
-    backgroundColor: colors.text,
+    backgroundColor: '#1E293B',
   },
 });
 
