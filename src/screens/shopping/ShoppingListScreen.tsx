@@ -25,7 +25,7 @@ import { Product, GroupMember } from '../../types';
  */
 const getMemberName = (uid: string, members: GroupMember[]): string => {
   const member = members.find((m) => m.userId === uid || m.id === uid);
-  return member?.displayName || member?.email || 'Membre inconnu';
+  return member?.displayName || member?.email || 'Membre';
 };
 
 /**
@@ -71,8 +71,9 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
   const [snackbarVisible, setSnackbarVisible] = useState(false);
 
   const isAdmin =
-    group?.adminUid === user?.uid ||
-    members.some((m) => (m.userId === user?.uid || m.id === user?.uid) && m.role === 'admin');
+    Boolean(user?.uid) &&
+    (group?.adminUid === user?.uid ||
+      members.some((m) => (m.userId === user?.uid || m.id === user?.uid) && m.role === 'admin'));
 
   /**
    * Refreshes the product catalog.
@@ -95,7 +96,7 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
     setActionLoadingId(productId);
     try {
       await markAsPurchased(productId);
-      setSnackbarMessage(`✓ Achat enregistré pour "${productName}" !`);
+      setSnackbarMessage(`✓ Achat validé pour "${productName}" ! Le tour passe au colocataire suivant.`);
       setSnackbarVisible(true);
     } catch (err: unknown) {
       const message =
@@ -149,7 +150,10 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
                 variant="bodyMedium"
                 style={[styles.turnText, isMyTurn && styles.myTurnText]}
               >
-                Tour : <Text style={{ fontWeight: '700' }}>{currentBuyerName}</Text>
+                Tour :{' '}
+                <Text style={{ fontWeight: '800', color: isMyTurn ? colors.success : colors.text }}>
+                  {currentBuyerName} {isMyTurn ? '👈 C\'est à vous !' : ''}
+                </Text>
               </Text>
             </View>
 
@@ -163,7 +167,7 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
                 style={styles.boughtButton}
                 labelStyle={styles.boughtButtonLabel}
               >
-                ACHETÉ
+                ACHETÉ ✓
               </Button>
             )}
           </View>
@@ -171,7 +175,7 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
           {/* Last Purchase Information */}
           <View style={styles.cardFooter}>
             <Text variant="bodySmall" style={styles.lastPurchaseText}>
-              Dernier achat :{' '}
+              🕒 Dernier achat :{' '}
               {item.lastPurchasedAt
                 ? `${formatDate(item.lastPurchasedAt)}${lastBuyerName ? ` par ${lastBuyerName}` : ''}`
                 : 'Aucun enregistrement'}
@@ -184,45 +188,81 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
 
   return (
     <View style={styles.container}>
-      {/* Product FlatList */}
-      <FlatList
-        data={products}
-        keyExtractor={(item) => item.id}
-        renderItem={renderProductItem}
-        contentContainerStyle={styles.listContainer}
-        ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={[colors.primary]}
-          />
-        }
-        ListEmptyComponent={
-          loading && !refreshing ? (
-            <ActivityIndicator style={styles.centered} size="large" color={colors.primary} />
-          ) : (
-            <Surface style={styles.emptyCard}>
-              <Text style={styles.emptyIcon}>🛒</Text>
-              <Text variant="titleMedium" style={styles.emptyTitle}>
-                Aucun produit
+      <View style={styles.contentWrapper}>
+        {/* Admin Action Bar */}
+        {isAdmin && (
+          <Surface style={styles.adminBar}>
+            <View style={{ flex: 1, paddingRight: spacing.sm }}>
+              <Text style={styles.adminBarTitle}>👑 Administration Achats</Text>
+              <Text style={styles.adminBarSub}>
+                Ajoutez des produits et gérez l'ordre de passage.
               </Text>
-              <Text variant="bodySmall" style={styles.emptySubtitle}>
-                {isAdmin
-                  ? "Vous êtes administrateur : appuyez sur le bouton '+' pour ajouter votre premier produit."
-                  : "Aucun produit. L'admin peut en ajouter."}
-              </Text>
-            </Surface>
-          )
-        }
-      />
+            </View>
+            <Button
+              mode="contained"
+              buttonColor={colors.primary}
+              compact
+              style={styles.addBtnTop}
+              labelStyle={{ fontSize: 12, fontWeight: '700' }}
+              onPress={() => navigation.navigate('AddProduct')}
+            >
+              + Produit
+            </Button>
+          </Surface>
+        )}
 
-      {/* Admin FAB to Add New Product */}
+        {/* Product FlatList */}
+        <FlatList
+          data={products}
+          keyExtractor={(item) => item.id}
+          renderItem={renderProductItem}
+          contentContainerStyle={styles.listContainer}
+          ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={[colors.primary]}
+            />
+          }
+          ListEmptyComponent={
+            loading && !refreshing ? (
+              <ActivityIndicator style={styles.centered} size="large" color={colors.primary} />
+            ) : (
+              <Surface style={styles.emptyCard}>
+                <Text style={styles.emptyIcon}>🛒</Text>
+                <Text variant="titleMedium" style={styles.emptyTitle}>
+                  Aucun produit dans la liste
+                </Text>
+                <Text variant="bodySmall" style={styles.emptySubtitle}>
+                  {isAdmin
+                    ? "Appuyez sur le bouton '+ Produit' ci-dessus pour ajouter le papier toilette, le liquide vaisselle, etc."
+                    : "Votre administrateur n'a pas encore ajouté de produits partagés."}
+                </Text>
+                {isAdmin && (
+                  <Button
+                    mode="contained"
+                    buttonColor={colors.primary}
+                    style={{ marginTop: spacing.md, borderRadius: borderRadius.md }}
+                    onPress={() => navigation.navigate('AddProduct')}
+                  >
+                    + Ajouter le premier produit
+                  </Button>
+                )}
+              </Surface>
+            )
+          }
+        />
+      </View>
+
+      {/* Floating Action Button for Admin */}
       {isAdmin && (
         <FAB
           icon="plus"
           label="Ajouter"
           style={styles.fab}
+          color="#FFFFFF"
           onPress={() => navigation.navigate('AddProduct')}
         />
       )}
@@ -248,21 +288,57 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  contentWrapper: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
+  },
+  adminBar: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    padding: spacing.md,
+    backgroundColor: '#EEF2FF',
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    elevation: 1,
+  },
+  adminBarTitle: {
+    fontWeight: '800',
+    color: colors.primary,
+    fontSize: 13,
+  },
+  adminBarSub: {
+    color: '#475569',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  addBtnTop: {
+    borderRadius: borderRadius.md,
+  },
   listContainer: {
     padding: spacing.md,
-    paddingBottom: spacing.xl * 2,
+    paddingBottom: spacing.xl * 3,
   },
   productCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     padding: spacing.md,
-    elevation: 2,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
+    elevation: 1,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   myTurnCard: {
     borderColor: colors.success,
-    backgroundColor: '#F1F8E9',
+    backgroundColor: '#F0FDF4',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -292,7 +368,7 @@ const styles = StyleSheet.create({
     marginLeft: spacing.sm,
   },
   boughtButtonLabel: {
-    fontWeight: '700',
+    fontWeight: '800',
     fontSize: 12,
   },
   cardFooter: {
@@ -309,6 +385,7 @@ const styles = StyleSheet.create({
     right: spacing.lg,
     bottom: spacing.lg,
     backgroundColor: colors.primary,
+    borderRadius: borderRadius.full,
   },
   centered: {
     marginTop: spacing.xl,
@@ -334,6 +411,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     paddingHorizontal: spacing.md,
+    lineHeight: 20,
   },
   snackbar: {
     backgroundColor: colors.text,

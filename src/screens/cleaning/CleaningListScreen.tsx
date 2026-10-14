@@ -26,37 +26,7 @@ import { CleaningTask, GroupMember } from '../../types';
  */
 const getMemberName = (uid: string, members: GroupMember[]): string => {
   const member = members.find((m) => m.userId === uid || m.id === uid);
-  return member?.displayName || member?.email || 'Membre inconnu';
-};
-
-/**
- * Maps task area string to a visual emoji icon.
- */
-const getAreaIcon = (area: string): string => {
-  const lower = (area || '').toLowerCase();
-  if (lower.includes('cuisine')) return '🍳';
-  if (lower.includes('bain') || lower.includes('douche')) return '🚿';
-  if (lower.includes('salon') || lower.includes('séjour')) return '🛋️';
-  if (lower.includes('wc') || lower.includes('toilette')) return '🚽';
-  if (lower.includes('couloir') || lower.includes('entrée')) return '🚪';
-  if (lower.includes('poubelle')) return '🗑️';
-  return '🧹';
-};
-
-/**
- * Formats frequency enum to French label.
- */
-const formatFrequency = (freq: string): string => {
-  switch (freq) {
-    case 'weekly':
-      return 'Hebdo';
-    case 'biweekly':
-      return 'Bi-hebdo';
-    case 'monthly':
-      return 'Mensuel';
-    default:
-      return freq;
-  }
+  return member?.displayName || member?.email || 'Membre';
 };
 
 /**
@@ -76,7 +46,7 @@ const formatDate = (dateValue?: string | Date | null): string => {
 };
 
 /**
- * Checks if a task due date is expired.
+ * Determines whether a task due date has passed.
  */
 const isOverdue = (dateValue?: string | Date | null): boolean => {
   if (!dateValue) return false;
@@ -88,6 +58,13 @@ const isOverdue = (dateValue?: string | Date | null): boolean => {
   }
 };
 
+const FREQUENCY_LABELS: Record<string, string> = {
+  daily: 'Quotidien',
+  weekly: 'Hebdo',
+  biweekly: 'Bi-hebdo',
+  monthly: 'Mensuel',
+};
+
 interface CleaningListScreenProps {
   navigation: {
     navigate: (screen: string, params?: any) => void;
@@ -95,8 +72,8 @@ interface CleaningListScreenProps {
 }
 
 /**
- * Screen displaying shared household chores, due dates, turn rotations,
- * overdue warnings, and completion triggers.
+ * Cleaning list screen displaying scheduled recurring chores,
+ * assignment rotation order, and completion action triggers.
  */
 export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigation }) => {
   const { user } = useAuth();
@@ -115,11 +92,12 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
   const [snackbarVisible, setSnackbarVisible] = useState(false);
 
   const isAdmin =
-    group?.adminUid === user?.uid ||
-    members.some((m) => (m.userId === user?.uid || m.id === user?.uid) && m.role === 'admin');
+    Boolean(user?.uid) &&
+    (group?.adminUid === user?.uid ||
+      members.some((m) => (m.userId === user?.uid || m.id === user?.uid) && m.role === 'admin'));
 
   /**
-   * Refreshes chore tasks list.
+   * Refreshes the chores list.
    */
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -133,13 +111,13 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
   }, [fetchTasks]);
 
   /**
-   * Marks a cleaning chore as completed.
+   * Dispatches mark-as-completed for a given cleaning task.
    */
-  const handleMarkDone = async (taskId: string, taskName: string) => {
+  const handleMarkCleaned = async (taskId: string, taskName: string) => {
     setActionLoadingId(taskId);
     try {
       await markAsDone(taskId);
-      setSnackbarMessage(`✓ Tâche terminée : "${taskName}" !`);
+      setSnackbarMessage(`✓ Nettoyage validé : "${taskName}" ! Le tour passe au colocataire suivant.`);
       setSnackbarVisible(true);
     } catch (err: unknown) {
       const message =
@@ -152,15 +130,15 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
   };
 
   /**
-   * Renders each individual chore item card.
+   * Renders an individual cleaning task card.
    */
-  const renderTaskItem = ({ item }: { item: CleaningTask }) => {
+  const renderCleaningItem = ({ item }: { item: CleaningTask }) => {
     const rotationList = item.rotationOrder || [];
     const currentCleanerUid =
       rotationList.length > 0 ? rotationList[item.currentTurnIndex % rotationList.length] : null;
 
     const isMyTurn = currentCleanerUid === user?.uid;
-    const cleanerName = currentCleanerUid
+    const currentCleanerName = currentCleanerUid
       ? isMyTurn
         ? 'Vous'
         : getMemberName(currentCleanerUid, members)
@@ -181,38 +159,38 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
             isMyTurn && !overdue && styles.myTurnCard,
           ]}
         >
-          {/* Card Top Row */}
+          {/* Card Header */}
           <View style={styles.cardHeader}>
-            <Text style={styles.areaIcon}>{getAreaIcon(item.area)}</Text>
+            <Text style={styles.areaIcon}>🧹</Text>
             <View style={styles.titleInfo}>
               <View style={styles.nameBadgeRow}>
-                <Text variant="titleMedium" style={styles.taskName} numberOfLines={1}>
+                <Text variant="titleMedium" style={styles.taskName}>
                   {item.name}
                 </Text>
-                <Chip compact style={styles.frequencyChip}>
-                  {formatFrequency(item.frequency)}
+                <Chip compact style={styles.frequencyChip} textStyle={{ fontSize: 11, fontWeight: '700' }}>
+                  {FREQUENCY_LABELS[item.frequency] || item.frequency}
                 </Chip>
               </View>
-
               <Text variant="bodySmall" style={styles.areaText}>
-                Zone : {item.area}
+                Zone : {item.area || 'Parties communes'}
               </Text>
             </View>
           </View>
 
-          {/* Responsible Person and Due Date */}
+          {/* Turn and Due Date Status */}
           <View style={styles.statusRow}>
             <View style={styles.assigneeContainer}>
-              <Text variant="bodyMedium" style={styles.assigneeLabel}>
-                Responsable :{' '}
-                <Text
-                  style={[
-                    styles.assigneeName,
-                    isMyTurn && styles.myTurnText,
-                  ]}
-                >
-                  {cleanerName}
-                </Text>
+              <Text variant="bodySmall" style={styles.assigneeLabel}>
+                Tour actuel :
+              </Text>
+              <Text
+                variant="bodyMedium"
+                style={[
+                  styles.assigneeName,
+                  isMyTurn && styles.myTurnText,
+                ]}
+              >
+                {currentCleanerName} {isMyTurn ? '👈 (À toi !)' : ''}
               </Text>
             </View>
 
@@ -221,26 +199,26 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
                 variant="bodySmall"
                 style={[styles.dueDateText, overdue && styles.overdueDateText]}
               >
-                {overdue ? '⚠️ ' : '📅 '}
+                {overdue ? '⚠️ En retard !' : '📅 Échéance :'}
+              </Text>
+              <Text
+                variant="bodySmall"
+                style={[styles.dueDateText, overdue && styles.overdueDateText]}
+              >
                 {formatDate(item.nextDueDate)}
               </Text>
             </View>
           </View>
 
-          {/* Action Button if user's turn */}
+          {/* Action Row */}
           {isMyTurn && (
             <View style={styles.actionRow}>
-              {overdue && (
-                <Text variant="labelSmall" style={styles.overdueAlertLabel}>
-                  En retard !
-                </Text>
-              )}
               <Button
                 mode="contained"
                 buttonColor={overdue ? colors.error : colors.primary}
                 loading={isActionRunning}
                 disabled={isActionRunning}
-                onPress={() => handleMarkDone(item.id, item.name)}
+                onPress={() => handleMarkCleaned(item.id, item.name)}
                 style={styles.doneButton}
                 labelStyle={styles.doneButtonLabel}
               >
@@ -255,45 +233,81 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
 
   return (
     <View style={styles.container}>
-      {/* FlatList of Tasks */}
-      <FlatList
-        data={tasks}
-        keyExtractor={(item) => item.id}
-        renderItem={renderTaskItem}
-        contentContainerStyle={styles.listContainer}
-        ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={[colors.primary]}
-          />
-        }
-        ListEmptyComponent={
-          loading && !refreshing ? (
-            <ActivityIndicator style={styles.centered} size="large" color={colors.primary} />
-          ) : (
-            <Surface style={styles.emptyCard}>
-              <Text style={styles.emptyIcon}>✨</Text>
-              <Text variant="titleMedium" style={styles.emptyTitle}>
-                Aucune tâche de ménage
+      <View style={styles.contentWrapper}>
+        {/* Admin Action Bar */}
+        {isAdmin && (
+          <Surface style={styles.adminBar}>
+            <View style={{ flex: 1, paddingRight: spacing.sm }}>
+              <Text style={styles.adminBarTitle}>👑 Administration Nettoyage</Text>
+              <Text style={styles.adminBarSub}>
+                Créez des corvées récurrentes et gérez les attributions.
               </Text>
-              <Text variant="bodySmall" style={styles.emptySubtitle}>
-                {isAdmin
-                  ? "Appuyez sur le bouton '+' pour définir vos premières corvées d'entretien."
-                  : "Aucune tâche configurée. L'administrateur peut en créer."}
-              </Text>
-            </Surface>
-          )
-        }
-      />
+            </View>
+            <Button
+              mode="contained"
+              buttonColor={colors.secondary}
+              compact
+              style={styles.addBtnTop}
+              labelStyle={{ fontSize: 12, fontWeight: '700' }}
+              onPress={() => navigation.navigate('AddCleaningTask')}
+            >
+              + Ménage
+            </Button>
+          </Surface>
+        )}
 
-      {/* Admin FAB for New Task */}
+        {/* Cleaning Tasks FlatList */}
+        <FlatList
+          data={tasks}
+          keyExtractor={(item) => item.id}
+          renderItem={renderCleaningItem}
+          contentContainerStyle={styles.listContainer}
+          ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={[colors.secondary]}
+            />
+          }
+          ListEmptyComponent={
+            loading && !refreshing ? (
+              <ActivityIndicator style={styles.centered} size="large" color={colors.secondary} />
+            ) : (
+              <Surface style={styles.emptyCard}>
+                <Text style={styles.emptyIcon}>✨</Text>
+                <Text variant="titleMedium" style={styles.emptyTitle}>
+                  Aucune tâche de ménage
+                </Text>
+                <Text variant="bodySmall" style={styles.emptySubtitle}>
+                  {isAdmin
+                    ? "Appuyez sur '+ Ménage' pour définir le planning d'entretien (cuisine, poubelles, salle de bain, etc.)."
+                    : "Aucune tâche configurée. L'administrateur peut en créer."}
+                </Text>
+                {isAdmin && (
+                  <Button
+                    mode="contained"
+                    buttonColor={colors.secondary}
+                    style={{ marginTop: spacing.md, borderRadius: borderRadius.md }}
+                    onPress={() => navigation.navigate('AddCleaningTask')}
+                  >
+                    + Créer une tâche de ménage
+                  </Button>
+                )}
+              </Surface>
+            )
+          }
+        />
+      </View>
+
+      {/* Floating Action Button for Admin */}
       {isAdmin && (
         <FAB
           icon="plus"
           label="Nouvelle tâche"
           style={styles.fab}
+          color="#FFFFFF"
           onPress={() => navigation.navigate('AddCleaningTask')}
         />
       )}
@@ -319,25 +333,61 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  contentWrapper: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
+  },
+  adminBar: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    padding: spacing.md,
+    backgroundColor: '#E0F2FE',
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    elevation: 1,
+  },
+  adminBarTitle: {
+    fontWeight: '800',
+    color: colors.secondary,
+    fontSize: 13,
+  },
+  adminBarSub: {
+    color: '#334155',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  addBtnTop: {
+    borderRadius: borderRadius.md,
+  },
   listContainer: {
     padding: spacing.md,
-    paddingBottom: spacing.xl * 2,
+    paddingBottom: spacing.xl * 3,
   },
   taskCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     padding: spacing.md,
-    elevation: 2,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
+    elevation: 1,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   overdueCard: {
     borderColor: colors.error,
-    backgroundColor: '#FFEBEE',
+    backgroundColor: '#FEF2F2',
   },
   myTurnCard: {
-    borderColor: colors.primary,
-    backgroundColor: '#F5F9FF',
+    borderColor: colors.secondary,
+    backgroundColor: '#F0F9FF',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -363,7 +413,7 @@ const styles = StyleSheet.create({
     marginRight: spacing.xs,
   },
   frequencyChip: {
-    backgroundColor: '#ECEFF1',
+    backgroundColor: '#F1F5F9',
   },
   areaText: {
     color: colors.textSecondary,
@@ -383,13 +433,14 @@ const styles = StyleSheet.create({
   },
   assigneeLabel: {
     color: colors.textSecondary,
+    fontSize: 11,
   },
   assigneeName: {
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
   },
   myTurnText: {
-    color: colors.primary,
+    color: colors.secondary,
   },
   dateContainer: {
     alignItems: 'flex-end',
@@ -407,25 +458,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     marginTop: spacing.sm,
-    gap: spacing.sm,
-  },
-  overdueAlertLabel: {
-    color: colors.error,
-    fontWeight: '700',
-    textTransform: 'uppercase',
   },
   doneButton: {
     borderRadius: borderRadius.md,
   },
   doneButtonLabel: {
-    fontWeight: '700',
+    fontWeight: '800',
     fontSize: 12,
   },
   fab: {
     position: 'absolute',
     right: spacing.lg,
     bottom: spacing.lg,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.secondary,
+    borderRadius: borderRadius.full,
   },
   centered: {
     marginTop: spacing.xl,
@@ -451,6 +497,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     paddingHorizontal: spacing.md,
+    lineHeight: 20,
   },
   snackbar: {
     backgroundColor: colors.text,

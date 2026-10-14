@@ -10,19 +10,18 @@ import {
   Text,
   Button,
   TextInput,
-  IconButton,
   Surface,
   SegmentedButtons,
+  Chip,
   Snackbar,
   Avatar,
   Divider,
-  Chip,
 } from 'react-native-paper';
 import { useAuth } from '../../hooks/useAuth';
 import { useGroup } from '../../hooks/useGroup';
 import { useCleaning } from '../../hooks/useCleaning';
 import { colors, spacing, borderRadius } from '../../constants/theme';
-import { GroupMember, CleaningFrequency } from '../../types';
+import { CleaningFrequency, GroupMember } from '../../types';
 
 /**
  * Resolves a user ID to a member display name.
@@ -33,7 +32,7 @@ const getMemberName = (uid: string, members: GroupMember[]): string => {
 };
 
 /**
- * Returns formatted date string (YYYY-MM-DD) for days in the future.
+ * Returns future date string formatted YYYY-MM-DD.
  */
 const getFutureDateString = (daysAhead: number): string => {
   const d = new Date();
@@ -48,10 +47,12 @@ interface AddCleaningTaskScreenProps {
 }
 
 /**
- * Screen enabling admins to configure a new recurring cleaning chore,
- * frequency, due date, and member rotation order.
+ * Screen enabling admins to define recurring house chores,
+ * cleaning frequency, initial deadlines, and assignment rotation.
  */
-export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({ navigation }) => {
+export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
+  navigation,
+}) => {
   const { user } = useAuth();
   const { group, members } = useGroup();
   const { addTask, loading } = useCleaning();
@@ -61,16 +62,15 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({ na
   const [frequency, setFrequency] = useState<CleaningFrequency>('weekly');
   const [dueDateText, setDueDateText] = useState(getFutureDateString(7));
   const [rotationOrder, setRotationOrder] = useState<string[]>([]);
-
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const isAdmin =
-    group?.adminUid === user?.uid ||
-    members.some((m) => (m.userId === user?.uid || m.id === user?.uid) && m.role === 'admin');
+    Boolean(user?.uid) &&
+    (group?.adminUid === user?.uid ||
+      members.some((m) => (m.userId === user?.uid || m.id === user?.uid) && m.role === 'admin'));
 
-  // Initialize rotation order with all member IDs
   useEffect(() => {
     if (members && members.length > 0 && rotationOrder.length === 0) {
       const uids = members.map((m) => m.userId || m.id);
@@ -78,9 +78,6 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({ na
     }
   }, [members, rotationOrder.length]);
 
-  /**
-   * Moves a member up one rank in rotation.
-   */
   const moveUp = (index: number) => {
     if (index <= 0) return;
     const newOrder = [...rotationOrder];
@@ -90,9 +87,6 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({ na
     setRotationOrder(newOrder);
   };
 
-  /**
-   * Moves a member down one rank in rotation.
-   */
   const moveDown = (index: number) => {
     if (index >= rotationOrder.length - 1) return;
     const newOrder = [...rotationOrder];
@@ -102,53 +96,48 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({ na
     setRotationOrder(newOrder);
   };
 
-  /**
-   * Validates form and submits new chore task creation.
-   */
   const handleAddTask = async () => {
     const trimmedName = name.trim();
     const trimmedArea = area.trim();
-    const trimmedDate = dueDateText.trim();
 
     if (!trimmedName) {
-      setErrorMessage('Veuillez renseigner le nom de la tâche (ex: Nettoyer la cuisine).');
+      setErrorMessage('Veuillez saisir le nom de la tâche.');
       setSnackbarVisible(true);
       return;
     }
 
     if (!trimmedArea) {
-      setErrorMessage('Veuillez spécifier la zone ou pièce (ex: Cuisine, Salle de bain...).');
+      setErrorMessage('Veuillez spécifier la zone ou pièce concernée.');
       setSnackbarVisible(true);
       return;
     }
 
-    // Basic date validation YYYY-MM-DD
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(trimmedDate) || isNaN(new Date(trimmedDate).getTime())) {
-      setErrorMessage('Format de date invalide. Utilisez AAAA-MM-JJ (ex: 2026-10-25).');
+    const parsedDate = new Date(dueDateText);
+    if (isNaN(parsedDate.getTime())) {
+      setErrorMessage('La date d\'échéance est invalide. Format attendu : AAAA-MM-JJ');
       setSnackbarVisible(true);
       return;
     }
 
-    if (rotationOrder.length < 1) {
-      setErrorMessage('Veuillez inclure au moins un colocataire dans la rotation.');
+    if (rotationOrder.length < 2 && members.length >= 2) {
+      setErrorMessage('La rotation doit comporter au moins 2 colocataires.');
       setSnackbarVisible(true);
       return;
     }
 
     setSubmitting(true);
     try {
-      await addTask({
-        name: trimmedName,
-        area: trimmedArea,
+      await addTask(
+        trimmedName,
+        trimmedArea,
         frequency,
-        rotationOrder,
-        nextDueDate: new Date(trimmedDate).toISOString(),
-      });
+        parsedDate.toISOString(),
+        rotationOrder
+      );
       navigation.goBack();
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'Erreur lors de la création de la tâche de ménage.';
+        err instanceof Error ? err.message : 'Erreur lors de la création de la tâche.';
       setErrorMessage(message);
       setSnackbarVisible(true);
       setSubmitting(false);
@@ -160,10 +149,10 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({ na
       <View style={styles.unauthorizedContainer}>
         <Text style={styles.lockIcon}>🔒</Text>
         <Text variant="titleMedium" style={styles.unauthorizedTitle}>
-          Accès administrateur requis
+          Accès réservé à l'administrateur
         </Text>
         <Text variant="bodyMedium" style={styles.unauthorizedSubtitle}>
-          Seul l'administrateur peut planifier de nouvelles corvées d'entretien.
+          Seul l'administrateur peut programmer de nouvelles corvées de ménage récurrentes.
         </Text>
         <Button mode="contained" onPress={() => navigation.goBack()} style={{ marginTop: spacing.md }}>
           Retour
@@ -177,179 +166,193 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({ na
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.flexContainer}
     >
-      {/* Top Bar */}
-      <View style={styles.topBar}>
-        <IconButton icon="arrow-left" size={24} onPress={() => navigation.goBack()} />
-        <Text variant="titleLarge" style={styles.screenTitle}>
-          Nouvelle tâche de ménage
-        </Text>
-        <View style={{ width: 48 }} />
-      </View>
-
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Name and Area */}
-        <Surface style={styles.cardSection}>
-          <Text variant="titleSmall" style={styles.sectionLabel}>
-            Détails de la tâche
+      <View style={styles.contentWrapper}>
+        {/* Top Bar */}
+        <View style={styles.topBar}>
+          <Button
+            mode="text"
+            onPress={() => navigation.goBack()}
+            style={{ margin: 0 }}
+            labelStyle={{ fontSize: 16 }}
+          >
+            ← Retour
+          </Button>
+          <Text variant="titleMedium" style={styles.screenTitle}>
+            Nouvelle Tâche de Ménage
           </Text>
+          <View style={{ width: 60 }} />
+        </View>
 
-          <TextInput
-            label="Nom de la tâche"
-            placeholder="Ex: Passer la serpillère, Vider les poubelles..."
-            value={name}
-            onChangeText={setName}
-            mode="outlined"
-            style={styles.input}
-            disabled={submitting}
-          />
-
-          <TextInput
-            label="Zone ou pièce"
-            placeholder="Ex: Cuisine, Salon, Salle de bain, WC..."
-            value={area}
-            onChangeText={setArea}
-            mode="outlined"
-            style={styles.input}
-            disabled={submitting}
-          />
-        </Surface>
-
-        {/* Frequency Segmented Buttons */}
-        <Surface style={styles.cardSection}>
-          <Text variant="titleSmall" style={styles.sectionLabel}>
-            Fréquence de répétition
-          </Text>
-          <SegmentedButtons
-            value={frequency}
-            onValueChange={(val) => setFrequency(val as CleaningFrequency)}
-            buttons={[
-              { value: 'weekly', label: 'Hebdo' },
-              { value: 'biweekly', label: 'Bi-hebdo' },
-              { value: 'monthly', label: 'Mensuelle' },
-            ]}
-            style={styles.segmentedButtons}
-          />
-        </Surface>
-
-        {/* First Due Date */}
-        <Surface style={styles.cardSection}>
-          <Text variant="titleSmall" style={styles.sectionLabel}>
-            Première date d'échéance (AAAA-MM-JJ)
-          </Text>
-          <TextInput
-            placeholder="2026-10-25"
-            value={dueDateText}
-            onChangeText={setDueDateText}
-            mode="outlined"
-            left={<TextInput.Icon icon="calendar" />}
-            style={styles.input}
-            disabled={submitting}
-          />
-
-          {/* Date presets */}
-          <View style={styles.presetsRow}>
-            <Chip
-              compact
-              onPress={() => setDueDateText(getFutureDateString(1))}
-              style={styles.presetChip}
-            >
-              Demain
-            </Chip>
-            <Chip
-              compact
-              onPress={() => setDueDateText(getFutureDateString(3))}
-              style={styles.presetChip}
-            >
-              Dans 3 jours
-            </Chip>
-            <Chip
-              compact
-              onPress={() => setDueDateText(getFutureDateString(7))}
-              style={styles.presetChip}
-            >
-              Dans 7 jours
-            </Chip>
-            <Chip
-              compact
-              onPress={() => setDueDateText(getFutureDateString(14))}
-              style={styles.presetChip}
-            >
-              Dans 14 jours
-            </Chip>
-          </View>
-        </Surface>
-
-        {/* Rotation Order Section */}
-        <Surface style={styles.cardSection}>
-          <Text variant="titleSmall" style={styles.sectionLabel}>
-            Ordre de rotation ({rotationOrder.length} membres)
-          </Text>
-          <Text variant="bodySmall" style={styles.sectionSubtitle}>
-            Le colocataire #1 effectuera le ménage pour la première échéance.
-          </Text>
-
-          <View style={styles.rotationList}>
-            {rotationOrder.map((uid, index) => {
-              const memberName = getMemberName(uid, members);
-              const isFirst = index === 0;
-              const isLast = index === rotationOrder.length - 1;
-
-              return (
-                <React.Fragment key={`add-clean-rot-${uid}`}>
-                  <View style={styles.memberRow}>
-                    <View style={styles.orderBadge}>
-                      <Text variant="labelLarge" style={styles.orderBadgeText}>
-                        {index + 1}
-                      </Text>
-                    </View>
-
-                    <Avatar.Text
-                      size={34}
-                      label={memberName.charAt(0).toUpperCase()}
-                      style={styles.memberAvatar}
-                    />
-
-                    <Text variant="bodyMedium" style={styles.memberName} numberOfLines={1}>
-                      {memberName}
-                    </Text>
-
-                    <View style={styles.orderButtons}>
-                      <IconButton
-                        icon="arrow-up"
-                        size={18}
-                        disabled={isFirst || submitting}
-                        onPress={() => moveUp(index)}
-                      />
-                      <IconButton
-                        icon="arrow-down"
-                        size={18}
-                        disabled={isLast || submitting}
-                        onPress={() => moveDown(index)}
-                      />
-                    </View>
-                  </View>
-                  {index < rotationOrder.length - 1 && <Divider />}
-                </React.Fragment>
-              );
-            })}
-          </View>
-        </Surface>
-
-        {/* Submit Button */}
-        <Button
-          mode="contained"
-          onPress={handleAddTask}
-          loading={submitting || loading}
-          disabled={submitting || loading}
-          style={styles.submitButton}
-          contentStyle={styles.submitButtonContent}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          Créer la tâche
-        </Button>
-      </ScrollView>
+          {/* Name and Area */}
+          <Surface style={styles.cardSection}>
+            <Text variant="titleSmall" style={styles.sectionLabel}>
+              Détails de la tâche
+            </Text>
+
+            <TextInput
+              label="Nom de la tâche"
+              placeholder="Ex: Nettoyer la cuisine, Vider les poubelles..."
+              value={name}
+              onChangeText={setName}
+              mode="outlined"
+              style={styles.input}
+              disabled={submitting}
+            />
+
+            <TextInput
+              label="Zone ou pièce"
+              placeholder="Ex: Cuisine, Salle de bain, Salon, WC..."
+              value={area}
+              onChangeText={setArea}
+              mode="outlined"
+              style={styles.input}
+              disabled={submitting}
+            />
+          </Surface>
+
+          {/* Frequency Segmented Buttons */}
+          <Surface style={styles.cardSection}>
+            <Text variant="titleSmall" style={styles.sectionLabel}>
+              Fréquence de répétition
+            </Text>
+            <SegmentedButtons
+              value={frequency}
+              onValueChange={(val) => setFrequency(val as CleaningFrequency)}
+              buttons={[
+                { value: 'weekly', label: 'Hebdo' },
+                { value: 'biweekly', label: 'Bi-hebdo' },
+                { value: 'monthly', label: 'Mensuelle' },
+              ]}
+              style={styles.segmentedButtons}
+            />
+          </Surface>
+
+          {/* First Due Date */}
+          <Surface style={styles.cardSection}>
+            <Text variant="titleSmall" style={styles.sectionLabel}>
+              Première date d'échéance (AAAA-MM-JJ)
+            </Text>
+            <TextInput
+              placeholder="2026-10-25"
+              value={dueDateText}
+              onChangeText={setDueDateText}
+              mode="outlined"
+              style={styles.input}
+              disabled={submitting}
+            />
+
+            {/* Date presets */}
+            <View style={styles.presetsRow}>
+              <Chip
+                compact
+                onPress={() => setDueDateText(getFutureDateString(1))}
+                style={styles.presetChip}
+              >
+                Demain
+              </Chip>
+              <Chip
+                compact
+                onPress={() => setDueDateText(getFutureDateString(3))}
+                style={styles.presetChip}
+              >
+                Dans 3 jours
+              </Chip>
+              <Chip
+                compact
+                onPress={() => setDueDateText(getFutureDateString(7))}
+                style={styles.presetChip}
+              >
+                Dans 7 jours
+              </Chip>
+              <Chip
+                compact
+                onPress={() => setDueDateText(getFutureDateString(14))}
+                style={styles.presetChip}
+              >
+                Dans 14 jours
+              </Chip>
+            </View>
+          </Surface>
+
+          {/* Rotation Order Section */}
+          <Surface style={styles.cardSection}>
+            <Text variant="titleSmall" style={styles.sectionLabel}>
+              Ordre de passage ({rotationOrder.length} colocataires)
+            </Text>
+            <Text variant="bodySmall" style={styles.sectionSubtitle}>
+              Le colocataire #1 effectuera la tâche en premier.
+            </Text>
+
+            <View style={styles.rotationList}>
+              {rotationOrder.map((uid, index) => {
+                const memberName = getMemberName(uid, members);
+                const isFirst = index === 0;
+                const isLast = index === rotationOrder.length - 1;
+
+                return (
+                  <React.Fragment key={`add-clean-rot-${uid}`}>
+                    <View style={styles.memberRow}>
+                      <View style={styles.orderBadge}>
+                        <Text variant="labelLarge" style={styles.orderBadgeText}>
+                          {index + 1}
+                        </Text>
+                      </View>
+
+                      <Avatar.Text
+                        size={34}
+                        label={memberName.charAt(0).toUpperCase()}
+                        style={styles.memberAvatar}
+                      />
+
+                      <Text variant="bodyMedium" style={styles.memberName} numberOfLines={1}>
+                        {memberName}
+                      </Text>
+
+                      <View style={styles.orderButtons}>
+                        <Button
+                          mode="text"
+                          compact
+                          disabled={isFirst || submitting}
+                          onPress={() => moveUp(index)}
+                        >
+                          ▲
+                        </Button>
+                        <Button
+                          mode="text"
+                          compact
+                          disabled={isLast || submitting}
+                          onPress={() => moveDown(index)}
+                        >
+                          ▼
+                        </Button>
+                      </View>
+                    </View>
+                    {index < rotationOrder.length - 1 && <Divider />}
+                  </React.Fragment>
+                );
+              })}
+            </View>
+          </Surface>
+
+          {/* Submit Button */}
+          <Button
+            mode="contained"
+            buttonColor={colors.secondary}
+            onPress={handleAddTask}
+            loading={submitting || loading}
+            disabled={submitting || loading}
+            style={styles.submitButton}
+            contentStyle={styles.submitButtonContent}
+          >
+            Créer la tâche de ménage
+          </Button>
+        </ScrollView>
+      </View>
 
       {/* Snackbar */}
       <Snackbar
@@ -372,17 +375,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  contentWrapper: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
+  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.sm,
-    paddingTop: spacing.md,
+    paddingVertical: spacing.sm,
     backgroundColor: colors.surface,
     elevation: 2,
   },
   screenTitle: {
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
   },
   scrollContent: {
@@ -392,18 +401,21 @@ const styles = StyleSheet.create({
   cardSection: {
     backgroundColor: colors.surface,
     padding: spacing.md,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     marginBottom: spacing.md,
     elevation: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   sectionLabel: {
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
     marginBottom: spacing.xs,
   },
   sectionSubtitle: {
     color: colors.textSecondary,
     marginBottom: spacing.sm,
+    fontSize: 12,
   },
   input: {
     marginBottom: spacing.sm,
@@ -418,7 +430,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   presetChip: {
-    backgroundColor: '#ECEFF1',
+    backgroundColor: '#F1F5F9',
   },
   rotationList: {
     marginTop: spacing.xs,
@@ -433,11 +445,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   orderBadgeText: {
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.textSecondary,
   },
   memberAvatar: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.secondary,
     marginRight: spacing.sm,
     marginLeft: spacing.xs,
   },
@@ -468,7 +480,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   unauthorizedTitle: {
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
   },
   unauthorizedSubtitle: {

@@ -5,7 +5,7 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Text, Button, Surface } from 'react-native-paper';
-import { theme } from '../../constants/theme';
+import { colors, spacing, borderRadius } from '../../constants/theme';
 import { Product, GroupMember } from '../../types';
 import { getCurrentAssignee } from '../../utils/rotation';
 import { formatDate } from '../../utils/dateUtils';
@@ -30,8 +30,8 @@ interface ProductCardProps {
  */
 const getMemberName = (uid: string, members: GroupMember[], currentUserId: string): string => {
   if (uid === currentUserId) return 'Toi';
-  const member = members.find((m) => m.userId === uid);
-  return member ? `Membre ${(member.orderIndex ?? 0) + 1}` : 'Inconnu';
+  const member = members.find((m) => m.userId === uid || m.id === uid);
+  return member?.displayName || member?.email || 'Membre';
 };
 
 const ProductCard: React.FC<ProductCardProps> = ({
@@ -47,7 +47,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
   const buyerName = getMemberName(currentBuyerId, members, currentUserId);
 
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={{ width: '100%' }}>
       <Surface
         style={[
           styles.card,
@@ -56,11 +56,11 @@ const ProductCard: React.FC<ProductCardProps> = ({
         elevation={1}
       >
         <View style={styles.row}>
-          <Text style={styles.icon}>{product.icon}</Text>
+          <Text style={styles.icon}>{product.icon || '🛒'}</Text>
           <View style={styles.content}>
             <Text style={styles.productName}>{product.name}</Text>
             <Text style={[styles.turnText, isMyTurn && styles.turnTextHighlight]}>
-              Tour : {buyerName} {isMyTurn ? '👈' : ''}
+              Tour : {buyerName} {isMyTurn ? '👈 (À toi !)' : ''}
             </Text>
             {lastPurchase && (
               <Text style={styles.lastPurchase}>
@@ -72,7 +72,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
             <Button
               mode="contained"
               onPress={onMarkPurchased}
-              buttonColor={theme.colors.success}
+              buttonColor={colors.success}
               textColor="#FFFFFF"
               compact
               style={styles.button}
@@ -89,15 +89,17 @@ const ProductCard: React.FC<ProductCardProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    marginHorizontal: theme.spacing.md,
-    marginVertical: theme.spacing.xs,
-    padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surface,
+    width: '100%',
+    marginVertical: spacing.xs,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   cardHighlight: {
-    borderLeftWidth: 4,
-    borderLeftColor: theme.colors.success,
+    borderColor: colors.success,
+    backgroundColor: '#F0FDF4',
   },
   row: {
     flexDirection: 'row',
@@ -105,37 +107,37 @@ const styles = StyleSheet.create({
   },
   icon: {
     fontSize: 32,
-    marginRight: theme.spacing.md,
+    marginRight: spacing.md,
   },
   content: {
     flex: 1,
   },
   productName: {
-    fontSize: theme.typography.fontSizes.body,
-    fontWeight: 'bold',
-    color: theme.colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
   },
   turnText: {
-    fontSize: theme.typography.fontSizes.caption,
-    color: theme.colors.textSecondary,
+    fontSize: 13,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   turnTextHighlight: {
-    color: theme.colors.success,
-    fontWeight: '600',
+    color: colors.success,
+    fontWeight: '700',
   },
   lastPurchase: {
-    fontSize: theme.typography.fontSizes.small,
-    color: theme.colors.textSecondary,
+    fontSize: 11,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   button: {
-    marginLeft: theme.spacing.sm,
-    borderRadius: theme.borderRadius.md,
+    marginLeft: spacing.sm,
+    borderRadius: borderRadius.md,
   },
   buttonLabel: {
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '800',
   },
 });
 

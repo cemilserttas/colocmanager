@@ -5,10 +5,10 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Text, Button, Chip, Surface } from 'react-native-paper';
-import { theme } from '../../constants/theme';
+import { colors, spacing, borderRadius } from '../../constants/theme';
 import { CleaningTask, GroupMember } from '../../types';
 import { getCurrentAssignee } from '../../utils/rotation';
-import { formatRelativeDate, isOverdue, getDaysUntilDue } from '../../utils/dateUtils';
+import { formatRelativeDate, isOverdue } from '../../utils/dateUtils';
 import { getIcon } from '../../constants/icons';
 
 interface CleaningCardProps {
@@ -25,6 +25,7 @@ interface CleaningCardProps {
 }
 
 const FREQUENCY_LABELS: Record<string, string> = {
+  daily: 'Quotidien',
   weekly: 'Hebdo',
   biweekly: 'Bi-hebdo',
   monthly: 'Mensuel',
@@ -33,7 +34,7 @@ const FREQUENCY_LABELS: Record<string, string> = {
 const getMemberName = (uid: string, members: GroupMember[], currentUserId: string): string => {
   if (uid === currentUserId) return 'Toi';
   const member = members.find((m) => m.userId === uid);
-  return member ? `Membre ${(member.orderIndex ?? 0) + 1}` : 'Inconnu';
+  return member?.displayName || member?.email || 'Membre';
 };
 
 const CleaningCard: React.FC<CleaningCardProps> = ({
@@ -50,7 +51,7 @@ const CleaningCard: React.FC<CleaningCardProps> = ({
   const areaIcon = getIcon('cleaning', task.area.toLowerCase());
 
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={{ width: '100%' }}>
       <Surface
         style={[
           styles.card,
@@ -60,15 +61,16 @@ const CleaningCard: React.FC<CleaningCardProps> = ({
         elevation={1}
       >
         <View style={styles.header}>
-          <Text style={styles.icon}>{areaIcon}</Text>
+          <Text style={styles.icon}>{areaIcon || '🧹'}</Text>
           <View style={styles.content}>
             <Text style={styles.taskName}>{task.name}</Text>
             <Text style={[styles.turnText, isMyTurn && styles.turnTextHighlight]}>
-              Responsable : {cleanerName} {isMyTurn ? '🔔' : ''}
+              Responsable : {cleanerName} {isMyTurn ? '👈 (À toi !)' : ''}
             </Text>
             <View style={styles.metaRow}>
               <Text style={[styles.dueDate, overdue && styles.dueDateOverdue]}>
-                Échéance : {formatRelativeDate(new Date(task.nextDueDate))}
+                {overdue ? '⚠️ En retard : ' : 'Échéance : '}
+                {formatRelativeDate(new Date(task.nextDueDate))}
               </Text>
               <Chip
                 compact
@@ -84,7 +86,7 @@ const CleaningCard: React.FC<CleaningCardProps> = ({
           <Button
             mode="contained"
             onPress={onMarkCompleted}
-            buttonColor={theme.colors.success}
+            buttonColor={overdue ? colors.error : colors.primary}
             textColor="#FFFFFF"
             style={styles.button}
             labelStyle={styles.buttonLabel}
@@ -99,19 +101,21 @@ const CleaningCard: React.FC<CleaningCardProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    marginHorizontal: theme.spacing.md,
-    marginVertical: theme.spacing.xs,
-    padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surface,
+    width: '100%',
+    marginVertical: spacing.xs,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   cardHighlight: {
-    borderLeftWidth: 4,
-    borderLeftColor: theme.colors.success,
+    borderColor: colors.secondary,
+    backgroundColor: '#F0F9FF',
   },
   cardOverdue: {
-    borderLeftWidth: 4,
-    borderLeftColor: theme.colors.error,
+    borderColor: colors.error,
+    backgroundColor: '#FEF2F2',
   },
   header: {
     flexDirection: 'row',
@@ -119,25 +123,25 @@ const styles = StyleSheet.create({
   },
   icon: {
     fontSize: 32,
-    marginRight: theme.spacing.md,
+    marginRight: spacing.md,
     marginTop: 2,
   },
   content: {
     flex: 1,
   },
   taskName: {
-    fontSize: theme.typography.fontSizes.body,
-    fontWeight: 'bold',
-    color: theme.colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
   },
   turnText: {
-    fontSize: theme.typography.fontSizes.caption,
-    color: theme.colors.textSecondary,
+    fontSize: 13,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   turnTextHighlight: {
-    color: theme.colors.success,
-    fontWeight: '600',
+    color: colors.secondary,
+    fontWeight: '700',
   },
   metaRow: {
     flexDirection: 'row',
@@ -146,28 +150,29 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   dueDate: {
-    fontSize: theme.typography.fontSizes.small,
-    color: theme.colors.textSecondary,
+    fontSize: 12,
+    color: colors.textSecondary,
   },
   dueDateOverdue: {
-    color: theme.colors.error,
-    fontWeight: '600',
+    color: colors.error,
+    fontWeight: '800',
   },
   chip: {
     height: 24,
-    backgroundColor: theme.colors.background,
+    backgroundColor: '#F1F5F9',
   },
   chipText: {
     fontSize: 10,
     lineHeight: 14,
+    fontWeight: '700',
   },
   button: {
-    marginTop: theme.spacing.sm,
-    borderRadius: theme.borderRadius.md,
+    marginTop: spacing.sm,
+    borderRadius: borderRadius.md,
   },
   buttonLabel: {
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });
 

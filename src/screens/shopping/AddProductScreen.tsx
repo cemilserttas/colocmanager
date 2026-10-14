@@ -11,7 +11,6 @@ import {
   Text,
   Button,
   TextInput,
-  IconButton,
   Surface,
   Snackbar,
   Avatar,
@@ -73,8 +72,9 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
   const [submitting, setSubmitting] = useState(false);
 
   const isAdmin =
-    group?.adminUid === user?.uid ||
-    members.some((m) => (m.userId === user?.uid || m.id === user?.uid) && m.role === 'admin');
+    Boolean(user?.uid) &&
+    (group?.adminUid === user?.uid ||
+      members.some((m) => (m.userId === user?.uid || m.id === user?.uid) && m.role === 'admin'));
 
   // Initialize rotation order with all member user IDs
   useEffect(() => {
@@ -109,22 +109,6 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
   };
 
   /**
-   * Toggles member inclusion in rotation.
-   */
-  const toggleMember = (uid: string) => {
-    if (rotationOrder.includes(uid)) {
-      if (rotationOrder.length <= 1) {
-        setErrorMessage('La rotation doit comporter au moins 1 colocataire.');
-        setSnackbarVisible(true);
-        return;
-      }
-      setRotationOrder(rotationOrder.filter((id) => id !== uid));
-    } else {
-      setRotationOrder([...rotationOrder, uid]);
-    }
-  };
-
-  /**
    * Validates and submits new product creation.
    */
   const handleAddProduct = async () => {
@@ -136,7 +120,7 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
     }
 
     if (rotationOrder.length < 2 && members.length >= 2) {
-      setErrorMessage('L\'ordre de rotation doit contenir au moins 2 colocataires.');
+      setErrorMessage("L'ordre de rotation doit contenir au moins 2 colocataires.");
       setSnackbarVisible(true);
       return;
     }
@@ -165,10 +149,10 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
       <View style={styles.unauthorizedContainer}>
         <Text style={styles.lockIcon}>🔒</Text>
         <Text variant="titleMedium" style={styles.unauthorizedTitle}>
-          Accès restreint
+          Accès réservé à l'administrateur
         </Text>
         <Text variant="bodyMedium" style={styles.unauthorizedSubtitle}>
-          Seul l'administrateur de la colocation peut ajouter de nouveaux produits partagés.
+          Seul l'administrateur de la colocation peut ajouter des produits partagés à la rotation.
         </Text>
         <Button mode="contained" onPress={() => navigation.goBack()} style={{ marginTop: spacing.md }}>
           Retour
@@ -182,127 +166,142 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.flexContainer}
     >
-      {/* Top Bar */}
-      <View style={styles.topBar}>
-        <IconButton icon="arrow-left" size={24} onPress={() => navigation.goBack()} />
-        <Text variant="titleLarge" style={styles.screenTitle}>
-          Ajouter un produit
-        </Text>
-        <View style={{ width: 48 }} />
-      </View>
-
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Name Input */}
-        <Surface style={styles.cardSection}>
-          <Text variant="titleSmall" style={styles.sectionLabel}>
-            Nom de l'article
-          </Text>
-          <TextInput
-            placeholder="Ex: Papier toilette, Lessive, Sacs poubelle..."
-            value={name}
-            onChangeText={setName}
-            mode="outlined"
-            style={styles.input}
-            disabled={submitting}
-          />
-        </Surface>
-
-        {/* Icon Picker */}
-        <Surface style={styles.cardSection}>
-          <Text variant="titleSmall" style={styles.sectionLabel}>
-            Icône associée : {selectedIcon}
-          </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.iconsRow}
+      <View style={styles.contentWrapper}>
+        {/* Top Bar */}
+        <View style={styles.topBar}>
+          <Button
+            mode="text"
+            onPress={() => navigation.goBack()}
+            style={{ margin: 0 }}
+            labelStyle={{ fontSize: 16 }}
           >
-            {SUGGESTED_ICONS.map((icon) => {
-              const isSelected = selectedIcon === icon;
-              return (
-                <TouchableOpacity
-                  key={`icon-${icon}`}
-                  onPress={() => setSelectedIcon(icon)}
-                  style={[styles.iconChip, isSelected && styles.selectedIconChip]}
-                >
-                  <Text style={styles.iconEmoji}>{icon}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </Surface>
-
-        {/* Rotation Order Section */}
-        <Surface style={styles.cardSection}>
-          <Text variant="titleSmall" style={styles.sectionLabel}>
-            Ordre de rotation ({rotationOrder.length} membres)
+            ← Retour
+          </Button>
+          <Text variant="titleMedium" style={styles.screenTitle}>
+            Nouveau Produit
           </Text>
-          <Text variant="bodySmall" style={styles.sectionSubtitle}>
-            Utilisez les flèches pour définir qui achètera en premier, en deuxième, etc.
-          </Text>
+          <View style={{ width: 60 }} />
+        </View>
 
-          <View style={styles.rotationList}>
-            {rotationOrder.map((uid, index) => {
-              const memberName = getMemberName(uid, members);
-              const isFirst = index === 0;
-              const isLast = index === rotationOrder.length - 1;
-
-              return (
-                <React.Fragment key={`add-rot-${uid}`}>
-                  <View style={styles.memberRow}>
-                    <View style={styles.orderBadge}>
-                      <Text variant="labelLarge" style={styles.orderBadgeText}>
-                        {index + 1}
-                      </Text>
-                    </View>
-
-                    <Avatar.Text
-                      size={34}
-                      label={memberName.charAt(0).toUpperCase()}
-                      style={styles.memberAvatar}
-                    />
-
-                    <Text variant="bodyMedium" style={styles.memberName} numberOfLines={1}>
-                      {memberName}
-                    </Text>
-
-                    <View style={styles.orderButtons}>
-                      <IconButton
-                        icon="arrow-up"
-                        size={18}
-                        disabled={isFirst || submitting}
-                        onPress={() => moveUp(index)}
-                      />
-                      <IconButton
-                        icon="arrow-down"
-                        size={18}
-                        disabled={isLast || submitting}
-                        onPress={() => moveDown(index)}
-                      />
-                    </View>
-                  </View>
-                  {index < rotationOrder.length - 1 && <Divider />}
-                </React.Fragment>
-              );
-            })}
-          </View>
-        </Surface>
-
-        {/* Submit Button */}
-        <Button
-          mode="contained"
-          onPress={handleAddProduct}
-          loading={submitting || loading}
-          disabled={submitting || loading}
-          style={styles.submitButton}
-          contentStyle={styles.submitButtonContent}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          Ajouter le produit
-        </Button>
-      </ScrollView>
+          {/* Name Input */}
+          <Surface style={styles.cardSection}>
+            <Text variant="titleSmall" style={styles.sectionLabel}>
+              Nom de l'article partagé
+            </Text>
+            <TextInput
+              placeholder="Ex: Papier toilette, Lessive, Liquide vaisselle..."
+              value={name}
+              onChangeText={setName}
+              mode="outlined"
+              style={styles.input}
+              disabled={submitting}
+            />
+          </Surface>
+
+          {/* Icon Picker */}
+          <Surface style={styles.cardSection}>
+            <Text variant="titleSmall" style={styles.sectionLabel}>
+              Icône associée : {selectedIcon}
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.iconsRow}
+            >
+              {SUGGESTED_ICONS.map((icon) => {
+                const isSelected = selectedIcon === icon;
+                return (
+                  <TouchableOpacity
+                    key={`icon-${icon}`}
+                    onPress={() => setSelectedIcon(icon)}
+                    style={[styles.iconChip, isSelected && styles.selectedIconChip]}
+                  >
+                    <Text style={styles.iconEmoji}>{icon}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </Surface>
+
+          {/* Rotation Order Section */}
+          <Surface style={styles.cardSection}>
+            <Text variant="titleSmall" style={styles.sectionLabel}>
+              Ordre de passage ({rotationOrder.length} colocataires)
+            </Text>
+            <Text variant="bodySmall" style={styles.sectionSubtitle}>
+              Le colocataire #1 achètera en premier. Ajustez avec les boutons ▲ et ▼ :
+            </Text>
+
+            <View style={styles.rotationList}>
+              {rotationOrder.map((uid, index) => {
+                const memberName = getMemberName(uid, members);
+                const isFirst = index === 0;
+                const isLast = index === rotationOrder.length - 1;
+
+                return (
+                  <React.Fragment key={`add-rot-${uid}`}>
+                    <View style={styles.memberRow}>
+                      <View style={styles.orderBadge}>
+                        <Text variant="labelLarge" style={styles.orderBadgeText}>
+                          {index + 1}
+                        </Text>
+                      </View>
+
+                      <Avatar.Text
+                        size={34}
+                        label={memberName.charAt(0).toUpperCase()}
+                        style={styles.memberAvatar}
+                      />
+
+                      <Text variant="bodyMedium" style={styles.memberName} numberOfLines={1}>
+                        {memberName}
+                      </Text>
+
+                      <View style={styles.orderButtons}>
+                        <Button
+                          mode="text"
+                          compact
+                          disabled={isFirst || submitting}
+                          onPress={() => moveUp(index)}
+                        >
+                          ▲
+                        </Button>
+                        <Button
+                          mode="text"
+                          compact
+                          disabled={isLast || submitting}
+                          onPress={() => moveDown(index)}
+                        >
+                          ▼
+                        </Button>
+                      </View>
+                    </View>
+                    {index < rotationOrder.length - 1 && <Divider />}
+                  </React.Fragment>
+                );
+              })}
+            </View>
+          </Surface>
+
+          {/* Submit Button */}
+          <Button
+            mode="contained"
+            buttonColor={colors.primary}
+            onPress={handleAddProduct}
+            loading={submitting || loading}
+            disabled={submitting || loading}
+            style={styles.submitButton}
+            contentStyle={styles.submitButtonContent}
+          >
+            Ajouter à la rotation
+          </Button>
+        </ScrollView>
+      </View>
 
       {/* Snackbar */}
       <Snackbar
@@ -325,17 +324,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  contentWrapper: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
+  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.sm,
-    paddingTop: spacing.md,
+    paddingVertical: spacing.sm,
     backgroundColor: colors.surface,
     elevation: 2,
   },
   screenTitle: {
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
   },
   scrollContent: {
@@ -345,18 +350,21 @@ const styles = StyleSheet.create({
   cardSection: {
     backgroundColor: colors.surface,
     padding: spacing.md,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     marginBottom: spacing.md,
     elevation: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   sectionLabel: {
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
     marginBottom: spacing.xs,
   },
   sectionSubtitle: {
     color: colors.textSecondary,
     marginBottom: spacing.sm,
+    fontSize: 12,
   },
   input: {
     marginTop: spacing.xs,
@@ -378,7 +386,7 @@ const styles = StyleSheet.create({
   },
   selectedIconChip: {
     borderColor: colors.primary,
-    backgroundColor: '#E3F2FD',
+    backgroundColor: '#EEF2FF',
   },
   iconEmoji: {
     fontSize: 22,
@@ -396,7 +404,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   orderBadgeText: {
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.textSecondary,
   },
   memberAvatar: {
@@ -431,7 +439,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   unauthorizedTitle: {
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
   },
   unauthorizedSubtitle: {

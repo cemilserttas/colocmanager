@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="%LANG_ISO_CODE%">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>ColocManager — Gestion de Colocation</title>
+    <meta name="description" content="Gestion des achats et du nettoyage équitable en colocation" />
+    <meta name="theme-color" content="#4F46E5" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <!-- MaterialCommunityIcons font definition for React Native Paper & @expo/vector-icons -->
+    <style id="material-community-icons-font">
+      @font-face {
+        font-family: 'MaterialCommunityIcons';
+        src: url('https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/fonts/materialdesignicons-webfont.woff2?v=7.4.47') format('woff2'),
+             url('https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/fonts/materialdesignicons-webfont.ttf?v=7.4.47') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+        font-display: swap;
+      }
+    </style>
+
+    <!-- Global layout, responsive containment, and zero-overflow rules -->
+    <style id="expo-reset">
+      *, *::before, *::after {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+        background-color: #F8FAFC;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        -webkit-tap-highlight-color: transparent;
+      }
+      body {
+        overflow: hidden;
+      }
+      #root {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        max-width: 680px;
+        margin: 0 auto;
+        height: 100%;
+        position: relative;
+        background-color: #F8FAFC;
+        box-shadow: 0 0 30px rgba(15, 23, 42, 0.08);
+        overflow-x: hidden;
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>
+      Vous devez activer JavaScript pour exécuter ColocManager.
+    </noscript>
+    <div id="root"></div>
+  </body>
+</html>

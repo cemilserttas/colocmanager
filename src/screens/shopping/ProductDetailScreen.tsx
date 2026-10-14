@@ -3,12 +3,10 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  FlatList,
 } from 'react-native';
 import {
   Text,
   Button,
-  IconButton,
   Surface,
   Dialog,
   Portal,
@@ -22,7 +20,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useGroup } from '../../hooks/useGroup';
 import { useShopping } from '../../hooks/useShopping';
 import { colors, spacing, borderRadius } from '../../constants/theme';
-import { Product, PurchaseRecord, GroupMember } from '../../types';
+import { PurchaseRecord, GroupMember } from '../../types';
 
 /**
  * Resolves a user ID to a member display name.
@@ -100,8 +98,9 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
   const [snackbarVisible, setSnackbarVisible] = useState(false);
 
   const isAdmin =
-    group?.adminUid === user?.uid ||
-    members.some((m) => (m.userId === user?.uid || m.id === user?.uid) && m.role === 'admin');
+    Boolean(user?.uid) &&
+    (group?.adminUid === user?.uid ||
+      members.some((m) => (m.userId === user?.uid || m.id === user?.uid) && m.role === 'admin'));
 
   // Load history if function available
   useEffect(() => {
@@ -209,134 +208,142 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.topBar}>
-        <IconButton icon="arrow-left" size={24} onPress={() => navigation.goBack()} />
-        <Text variant="titleLarge" style={styles.screenTitle} numberOfLines={1}>
-          {product.name}
-        </Text>
-        <View style={{ width: 48 }} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Product Banner */}
-        <Surface style={styles.bannerSurface}>
-          <Text style={styles.bannerIcon}>{product.icon || '🛒'}</Text>
-          <Text variant="headlineSmall" style={styles.bannerName}>
+      <View style={styles.contentWrapper}>
+        {/* Header */}
+        <View style={styles.topBar}>
+          <Button
+            mode="text"
+            onPress={() => navigation.goBack()}
+            style={{ margin: 0 }}
+            labelStyle={{ fontSize: 16 }}
+          >
+            ← Retour
+          </Button>
+          <Text variant="titleMedium" style={styles.screenTitle} numberOfLines={1}>
             {product.name}
           </Text>
-          <Chip icon="autorenew" style={styles.rotationChip}>
-            {rotationList.length} colocataires en rotation
-          </Chip>
-        </Surface>
+          <View style={{ width: 60 }} />
+        </View>
 
-        {/* Rotation Order Section */}
-        <View style={styles.sectionHeaderRow}>
-          <Text variant="titleMedium" style={styles.sectionTitle}>
-            Ordre de rotation
-          </Text>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          {/* Product Banner */}
+          <Surface style={styles.bannerSurface}>
+            <Text style={styles.bannerIcon}>{product.icon || '🛒'}</Text>
+            <Text variant="headlineSmall" style={styles.bannerName}>
+              {product.name}
+            </Text>
+            <Chip style={styles.rotationChip} textStyle={{ color: '#065F46', fontWeight: '700' }}>
+              🔄 {rotationList.length} colocataires en rotation
+            </Chip>
+          </Surface>
+
+          {/* Rotation Order Section */}
+          <View style={styles.sectionHeaderRow}>
+            <Text variant="titleMedium" style={styles.sectionTitle}>
+              Ordre de passage
+            </Text>
+            {isAdmin && (
+              <Button mode="text" onPress={handleOpenReorder} style={styles.editButton}>
+                Modifier l'ordre
+              </Button>
+            )}
+          </View>
+
+          <Surface style={styles.rotationCard}>
+            {rotationList.map((uid, index) => {
+              const isCurrent = index === currentTurnIndex;
+              const memberName = getMemberName(uid, members);
+              const isSelf = uid === user?.uid;
+
+              return (
+                <React.Fragment key={`rotation-${uid}-${index}`}>
+                  <View style={[styles.rotationRow, isCurrent && styles.activeRotationRow]}>
+                    <View style={styles.rotationOrderBadge}>
+                      <Text
+                        variant="labelLarge"
+                        style={[styles.rotationOrderNumber, isCurrent && styles.activeOrderNumber]}
+                      >
+                        {index + 1}
+                      </Text>
+                    </View>
+                    <Avatar.Text
+                      size={36}
+                      label={memberName.charAt(0).toUpperCase()}
+                      style={[styles.memberAvatar, isCurrent && styles.activeAvatar]}
+                    />
+                    <View style={styles.memberNameContainer}>
+                      <Text
+                        variant="titleSmall"
+                        style={[styles.memberNameText, isCurrent && styles.activeMemberName]}
+                      >
+                        {memberName} {isSelf ? '(Vous)' : ''}
+                      </Text>
+                      {isCurrent && (
+                        <Text variant="labelSmall" style={styles.currentTurnBadge}>
+                          ★ C'est son tour d'acheter !
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  {index < rotationList.length - 1 && <Divider />}
+                </React.Fragment>
+              );
+            })}
+          </Surface>
+
+          {/* Purchase History Section */}
+          <View style={styles.sectionHeaderRow}>
+            <Text variant="titleMedium" style={styles.sectionTitle}>
+              Historique des achats
+            </Text>
+          </View>
+
+          <Surface style={styles.historyCard}>
+            {historyLoading ? (
+              <ActivityIndicator style={styles.centered} size="small" color={colors.primary} />
+            ) : history.length === 0 ? (
+              <View style={styles.emptyHistory}>
+                <Text variant="bodyMedium" style={styles.emptyHistoryText}>
+                  {product.lastPurchasedAt
+                    ? `Dernier achat enregistré le ${formatDate(product.lastPurchasedAt)} par ${
+                        product.lastPurchasedBy ? getMemberName(product.lastPurchasedBy, members) : 'un coloc'
+                      }.`
+                    : 'Aucun achat validé pour le moment.'}
+                </Text>
+              </View>
+            ) : (
+              history.map((record, idx) => (
+                <React.Fragment key={record.id || `hist-${idx}`}>
+                  <View style={styles.historyRow}>
+                    <Text style={{ fontSize: 20, marginRight: spacing.sm }}>✅</Text>
+                    <View style={styles.historyDetails}>
+                      <Text variant="bodyMedium" style={styles.historyBuyer}>
+                        Acheté par {getMemberName(record.buyerUid, members)}
+                      </Text>
+                      <Text variant="bodySmall" style={styles.historyDate}>
+                        {formatDate(record.purchasedAt)}
+                      </Text>
+                    </View>
+                  </View>
+                  {idx < history.length - 1 && <Divider />}
+                </React.Fragment>
+              ))
+            )}
+          </Surface>
+
+          {/* Admin Delete Action */}
           {isAdmin && (
-            <Button mode="text" onPress={handleOpenReorder} style={styles.editButton}>
-              Modifier l'ordre
+            <Button
+              mode="outlined"
+              textColor={colors.error}
+              style={styles.deleteButton}
+              onPress={() => setDeleteDialogVisible(true)}
+            >
+              🗑️ Supprimer ce produit
             </Button>
           )}
-        </View>
-
-        <Surface style={styles.rotationCard}>
-          {rotationList.map((uid, index) => {
-            const isCurrent = index === currentTurnIndex;
-            const memberName = getMemberName(uid, members);
-            const isSelf = uid === user?.uid;
-
-            return (
-              <React.Fragment key={`rotation-${uid}-${index}`}>
-                <View style={[styles.rotationRow, isCurrent && styles.activeRotationRow]}>
-                  <View style={styles.rotationOrderBadge}>
-                    <Text
-                      variant="labelLarge"
-                      style={[styles.rotationOrderNumber, isCurrent && styles.activeOrderNumber]}
-                    >
-                      {index + 1}
-                    </Text>
-                  </View>
-                  <Avatar.Text
-                    size={36}
-                    label={memberName.charAt(0).toUpperCase()}
-                    style={[styles.memberAvatar, isCurrent && styles.activeAvatar]}
-                  />
-                  <View style={styles.memberNameContainer}>
-                    <Text
-                      variant="titleSmall"
-                      style={[styles.memberNameText, isCurrent && styles.activeMemberName]}
-                    >
-                      {memberName} {isSelf ? '(Vous)' : ''}
-                    </Text>
-                    {isCurrent && (
-                      <Text variant="labelSmall" style={styles.currentTurnBadge}>
-                        ★ Tour actuel
-                      </Text>
-                    )}
-                  </View>
-                </View>
-                {index < rotationList.length - 1 && <Divider />}
-              </React.Fragment>
-            );
-          })}
-        </Surface>
-
-        {/* Purchase History Section */}
-        <View style={styles.sectionHeaderRow}>
-          <Text variant="titleMedium" style={styles.sectionTitle}>
-            Historique des achats
-          </Text>
-        </View>
-
-        <Surface style={styles.historyCard}>
-          {historyLoading ? (
-            <ActivityIndicator style={styles.centered} size="small" color={colors.primary} />
-          ) : history.length === 0 ? (
-            <View style={styles.emptyHistory}>
-              <Text variant="bodyMedium" style={styles.emptyHistoryText}>
-                {product.lastPurchasedAt
-                  ? `Dernier achat enregistré le ${formatDate(product.lastPurchasedAt)} par ${
-                      product.lastPurchasedBy ? getMemberName(product.lastPurchasedBy, members) : 'un coloc'
-                    }.`
-                  : 'Aucun historique disponible pour ce produit.'}
-              </Text>
-            </View>
-          ) : (
-            history.map((record, idx) => (
-              <React.Fragment key={record.id || `hist-${idx}`}>
-                <View style={styles.historyRow}>
-                  <IconButton icon="check-circle" iconColor={colors.success} size={22} />
-                  <View style={styles.historyDetails}>
-                    <Text variant="bodyMedium" style={styles.historyBuyer}>
-                      Acheté par {getMemberName(record.buyerUid, members)}
-                    </Text>
-                    <Text variant="bodySmall" style={styles.historyDate}>
-                      {formatDate(record.purchasedAt)}
-                    </Text>
-                  </View>
-                </View>
-                {idx < history.length - 1 && <Divider />}
-              </React.Fragment>
-            ))
-          )}
-        </Surface>
-
-        {/* Admin Delete Action */}
-        {isAdmin && (
-          <Button
-            mode="outlined"
-            textColor={colors.error}
-            icon="trash-can-outline"
-            style={styles.deleteButton}
-            onPress={() => setDeleteDialogVisible(true)}
-          >
-            Supprimer ce produit
-          </Button>
-        )}
-      </ScrollView>
+        </ScrollView>
+      </View>
 
       {/* Reorder Dialog */}
       <Portal>
@@ -344,7 +351,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
           <Dialog.Title>Modifier l'ordre de passage</Dialog.Title>
           <Dialog.Content>
             <Text variant="bodySmall" style={styles.dialogDescription}>
-              Utilisez les flèches pour réorganiser l'ordre d'achat entre les colocataires :
+              Utilisez les boutons monter / descendre pour réorganiser l'ordre d'achat :
             </Text>
             <ScrollView style={styles.dialogList}>
               {tempOrder.map((uid, idx) => {
@@ -358,18 +365,22 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
                       {name}
                     </Text>
                     <View style={styles.reorderArrows}>
-                      <IconButton
-                        icon="arrow-up"
-                        size={18}
+                      <Button
+                        mode="text"
+                        compact
                         disabled={idx === 0}
                         onPress={() => moveUp(idx)}
-                      />
-                      <IconButton
-                        icon="arrow-down"
-                        size={18}
+                      >
+                        ▲
+                      </Button>
+                      <Button
+                        mode="text"
+                        compact
                         disabled={idx === tempOrder.length - 1}
                         onPress={() => moveDown(idx)}
-                      />
+                      >
+                        ▼
+                      </Button>
                     </View>
                   </View>
                 );
@@ -378,7 +389,12 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setReorderDialogVisible(false)}>Annuler</Button>
-            <Button mode="contained" onPress={handleSaveOrder} loading={savingOrder}>
+            <Button
+              mode="contained"
+              buttonColor={colors.primary}
+              onPress={handleSaveOrder}
+              loading={savingOrder}
+            >
               Enregistrer
             </Button>
           </Dialog.Actions>
@@ -426,6 +442,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  contentWrapper: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
+  },
   notFoundContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -437,12 +459,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.sm,
-    paddingTop: spacing.md,
+    paddingVertical: spacing.sm,
     backgroundColor: colors.surface,
     elevation: 2,
   },
   screenTitle: {
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
     flex: 1,
     textAlign: 'center',
@@ -470,7 +492,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   rotationChip: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#ECFDF5',
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -481,7 +503,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
   },
   sectionTitle: {
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
   },
   editButton: {
@@ -489,9 +511,11 @@ const styles = StyleSheet.create({
   },
   rotationCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     elevation: 1,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   rotationRow: {
     flexDirection: 'row',
@@ -500,14 +524,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   activeRotationRow: {
-    backgroundColor: '#F1F8E9',
+    backgroundColor: '#F0FDF4',
   },
   rotationOrderBadge: {
     width: 28,
     alignItems: 'center',
   },
   rotationOrderNumber: {
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.textSecondary,
   },
   activeOrderNumber: {
@@ -524,12 +548,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   memberNameText: {
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.text,
   },
   activeMemberName: {
     color: colors.success,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   currentTurnBadge: {
     color: colors.success,
@@ -538,9 +562,11 @@ const styles = StyleSheet.create({
   },
   historyCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     elevation: 1,
     paddingVertical: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   emptyHistory: {
     padding: spacing.md,
@@ -549,23 +575,24 @@ const styles = StyleSheet.create({
   emptyHistoryText: {
     color: colors.textSecondary,
     textAlign: 'center',
+    lineHeight: 20,
   },
   historyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
   historyDetails: {
     flex: 1,
-    marginLeft: spacing.xs,
   },
   historyBuyer: {
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.text,
   },
   historyDate: {
     color: colors.textSecondary,
+    marginTop: 2,
   },
   deleteButton: {
     marginTop: spacing.xl,
@@ -587,6 +614,7 @@ const styles = StyleSheet.create({
   reorderIndex: {
     width: 24,
     color: colors.textSecondary,
+    fontWeight: '700',
   },
   reorderName: {
     flex: 1,

@@ -44,8 +44,9 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
   const [actionLoading, setActionLoading] = useState(false);
 
   const isAdmin =
-    group?.adminUid === user?.uid ||
-    members.some((m) => (m.userId === user?.uid || m.id === user?.uid) && m.role === 'admin');
+    Boolean(user?.uid) &&
+    (group?.adminUid === user?.uid ||
+      members.some((m) => (m.userId === user?.uid || m.id === user?.uid) && m.role === 'admin'));
 
   /**
    * Copies the current invite code to system clipboard.
@@ -139,22 +140,24 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
         <View style={styles.memberRight}>
           {isMemberAdmin ? (
             <View style={styles.adminBadge}>
-              <IconButton icon="crown" size={20} iconColor="#FFA000" style={styles.crownIcon} />
+              <Text style={{ fontSize: 14, marginRight: 4 }}>👑</Text>
               <Text variant="labelSmall" style={styles.adminText}>
                 Admin
               </Text>
             </View>
           ) : (
             isAdmin && (
-              <IconButton
-                icon="close-circle-outline"
-                iconColor={colors.error}
-                size={24}
+              <Button
+                mode="text"
+                textColor={colors.error}
+                compact
                 onPress={() => {
                   setMemberToRemove(item);
                   setRemoveDialogVisible(true);
                 }}
-              />
+              >
+                Retirer
+              </Button>
             )
           )}
         </View>
@@ -164,83 +167,103 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
 
   return (
     <View style={styles.container}>
-      {/* Top Header */}
-      <View style={styles.header}>
-        <IconButton icon="arrow-left" size={24} onPress={() => navigation.goBack()} />
-        <Text variant="titleLarge" style={styles.headerTitle}>
-          Membres de la colocation
-        </Text>
-        <View style={{ width: 48 }} />
-      </View>
-
-      {/* Admin Access Check */}
-      {!isAdmin && (
-        <Surface style={styles.nonAdminBanner}>
-          <Text variant="bodySmall" style={styles.nonAdminText}>
-            ℹ️ Seul l'administrateur peut exclure des membres ou régénérer le code d'invitation.
+      <View style={styles.contentWrapper}>
+        {/* Top Header */}
+        <View style={styles.header}>
+          <Button
+            mode="text"
+            onPress={() => navigation.goBack()}
+            style={{ margin: 0 }}
+            labelStyle={{ fontSize: 16 }}
+          >
+            ← Retour
+          </Button>
+          <Text variant="titleMedium" style={styles.headerTitle}>
+            Gestion des Colocataires
           </Text>
-        </Surface>
-      )}
-
-      {/* Member Count */}
-      <View style={styles.listHeader}>
-        <Text variant="titleSmall" style={styles.listSubtitle}>
-          {members.length} {members.length > 1 ? 'membres inscrits' : 'membre inscrit'}
-        </Text>
-      </View>
-
-      {/* Member FlatList */}
-      <FlatList
-        data={members}
-        keyExtractor={(item) => item.id || item.userId}
-        renderItem={renderMemberItem}
-        contentContainerStyle={styles.listContent}
-        ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
-        ListEmptyComponent={
-          loading ? (
-            <ActivityIndicator style={styles.centered} size="large" color={colors.primary} />
-          ) : (
-            <Text style={styles.emptyText}>Aucun membre trouvé.</Text>
-          )
-        }
-      />
-
-      <Divider />
-
-      {/* Invite Code Section at Bottom */}
-      <Surface style={styles.inviteSection}>
-        <Text variant="titleSmall" style={styles.inviteTitle}>
-          Code d'invitation du groupe
-        </Text>
-        <Text variant="bodySmall" style={styles.inviteSubtitle}>
-          Partagez ce code avec vos colocataires pour qu'ils rejoignent l'espace.
-        </Text>
-
-        <View style={styles.codeContainer}>
-          <Text variant="headlineMedium" style={styles.inviteCode}>
-            {group?.inviteCode || '------'}
-          </Text>
-          <IconButton
-            icon="content-copy"
-            size={24}
-            iconColor={colors.primary}
-            onPress={handleCopyInviteCode}
-          />
+          <View style={{ width: 60 }} />
         </View>
 
-        {isAdmin && (
-          <Button
-            mode="outlined"
-            icon="refresh"
-            onPress={() => setRegenerateDialogVisible(true)}
-            loading={actionLoading}
-            disabled={actionLoading}
-            style={styles.regenerateButton}
-          >
-            Régénérer le code
-          </Button>
+        {/* Admin Access Check */}
+        {!isAdmin ? (
+          <Surface style={styles.nonAdminBanner}>
+            <Text variant="bodySmall" style={styles.nonAdminText}>
+              ℹ️ Seul l'administrateur peut exclure des membres ou régénérer le code d'invitation.
+            </Text>
+          </Surface>
+        ) : (
+          <Surface style={styles.adminInfoBanner}>
+            <Text variant="bodySmall" style={styles.adminInfoText}>
+              👑 En tant qu'administrateur, vous pouvez partager le code d'invitation ci-dessous avec vos colocataires pour qu'ils rejoignent l'application.
+            </Text>
+          </Surface>
         )}
-      </Surface>
+
+        {/* Member Count */}
+        <View style={styles.listHeader}>
+          <Text variant="titleSmall" style={styles.listSubtitle}>
+            {members.length} {members.length > 1 ? 'membres dans la colocation' : 'membre dans la colocation'}
+          </Text>
+        </View>
+
+        {/* Member FlatList */}
+        <FlatList
+          data={members}
+          keyExtractor={(item) => item.id || item.userId}
+          renderItem={renderMemberItem}
+          contentContainerStyle={styles.listContent}
+          ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            loading ? (
+              <ActivityIndicator style={styles.centered} size="large" color={colors.primary} />
+            ) : (
+              <Text style={styles.emptyText}>Aucun membre trouvé.</Text>
+            )
+          }
+        />
+
+        <Divider />
+
+        {/* Invite Code Section at Bottom */}
+        <Surface style={styles.inviteSection}>
+          <Text variant="titleSmall" style={styles.inviteTitle}>
+            Code d'invitation de la colocation
+          </Text>
+          <Text variant="bodySmall" style={styles.inviteSubtitle}>
+            Partage ce code à tes nouveaux colocataires pour qu'ils rejoignent le groupe.
+          </Text>
+
+          <View style={styles.codeContainer}>
+            <Text variant="headlineMedium" style={styles.inviteCode}>
+              {group?.inviteCode || '------'}
+            </Text>
+            <Button
+              mode="contained"
+              buttonColor={colors.primary}
+              compact
+              onPress={handleCopyInviteCode}
+              style={{ borderRadius: borderRadius.md }}
+              labelStyle={{ fontSize: 12, fontWeight: '700' }}
+            >
+              📋 Copier
+            </Button>
+          </View>
+
+          {isAdmin && (
+            <Button
+              mode="outlined"
+              onPress={() => setRegenerateDialogVisible(true)}
+              loading={actionLoading}
+              disabled={actionLoading}
+              style={styles.regenerateButton}
+              labelStyle={{ fontSize: 13, fontWeight: '600' }}
+            >
+              🔄 Renouveler le code d'accès
+            </Button>
+          )}
+        </Surface>
+      </View>
 
       {/* Confirmation Dialog for Member Removal */}
       <Portal>
@@ -252,7 +275,7 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
               <Text style={{ fontWeight: '700' }}>
                 {memberToRemove?.displayName || 'ce membre'}
               </Text>{' '}
-              de la colocation ? Cette action est irréversible.
+              de la colocation ? Cette action réattribuera ses tâches.
             </Text>
           </Dialog.Content>
           <Dialog.Actions>
@@ -275,14 +298,15 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
           <Dialog.Title>Régénérer le code d'invitation</Dialog.Title>
           <Dialog.Content>
             <Text variant="bodyMedium">
-              L'ancien code deviendra immédiatement invalide. Vos futurs colocataires devront utiliser
-              le nouveau code.
+              L'ancien code deviendra immédiatement invalide. Vos futurs colocataires devront entrer le
+              nouveau code.
             </Text>
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setRegenerateDialogVisible(false)}>Annuler</Button>
             <Button
               mode="contained"
+              buttonColor={colors.primary}
               onPress={handleConfirmRegenerateCode}
               loading={actionLoading}
             >
@@ -313,42 +337,66 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  contentWrapper: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.sm,
-    paddingTop: spacing.md,
+    paddingVertical: spacing.sm,
     backgroundColor: colors.surface,
     elevation: 2,
   },
   headerTitle: {
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
   },
   nonAdminBanner: {
     margin: spacing.md,
     marginBottom: 0,
-    padding: spacing.sm,
+    padding: spacing.md,
     borderRadius: borderRadius.md,
-    backgroundColor: '#FFF8E1',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
   },
   nonAdminText: {
-    color: '#8D6E63',
+    color: '#92400E',
+    fontSize: 13,
+  },
+  adminInfoBanner: {
+    margin: spacing.md,
+    marginBottom: 0,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: '#EEF2FF',
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+  },
+  adminInfoText: {
+    color: '#3730A3',
+    fontSize: 13,
+    lineHeight: 18,
   },
   listHeader: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     paddingBottom: spacing.xs,
   },
   listSubtitle: {
     color: colors.textSecondary,
-    fontWeight: '600',
+    fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    fontSize: 12,
   },
   listContent: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingBottom: spacing.md,
     paddingTop: spacing.xs,
   },
@@ -357,10 +405,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.sm + 2,
     paddingHorizontal: spacing.md,
     elevation: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   memberLeft: {
     flexDirection: 'row',
@@ -379,16 +429,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   memberName: {
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.text,
   },
   selfBadge: {
     marginLeft: spacing.xs,
     color: colors.primary,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   memberEmail: {
     color: colors.textSecondary,
+    marginTop: 2,
   },
   memberRight: {
     flexDirection: 'row',
@@ -397,43 +448,45 @@ const styles = StyleSheet.create({
   adminBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF8E1',
-    borderRadius: borderRadius.sm,
-    paddingRight: spacing.sm,
-  },
-  crownIcon: {
-    margin: 0,
+    backgroundColor: '#FEF3C7',
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs - 1,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
   },
   adminText: {
-    color: '#F57F17',
-    fontWeight: '700',
+    color: '#B45309',
+    fontWeight: '800',
+    fontSize: 11,
   },
   inviteSection: {
     backgroundColor: colors.surface,
-    padding: spacing.lg,
-    borderTopLeftRadius: borderRadius.lg,
-    borderTopRightRadius: borderRadius.lg,
+    padding: spacing.md,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
     elevation: 4,
   },
   inviteTitle: {
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
   },
   inviteSubtitle: {
     color: colors.textSecondary,
     marginBottom: spacing.sm,
+    fontSize: 12,
   },
   codeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.xs,
-    paddingVertical: spacing.xs,
-    marginBottom: spacing.md,
-    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.sm,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm,
+    borderWidth: 1.5,
     borderColor: colors.border,
   },
   inviteCode: {

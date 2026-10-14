@@ -1,17 +1,24 @@
 import { MD3LightTheme, MD3Theme } from 'react-native-paper';
 
 export const colors = {
-  primary: '#4A90D9',
-  secondary: '#5C6BC0',
-  accent: '#FF7043',
-  success: '#66BB6A',
-  warning: '#FFA726',
-  error: '#EF5350',
-  background: '#F5F5F5',
+  primary: '#4F46E5',        // Modern Indigo
+  primaryDark: '#4338CA',
+  primaryLight: '#EEF2FF',
+  secondary: '#0284C7',      // Sky Blue
+  secondaryLight: '#E0F2FE',
+  accent: '#F59E0B',         // Amber Accent
+  success: '#10B981',        // Emerald Green
+  successLight: '#ECFDF5',
+  warning: '#F59E0B',        // Amber
+  warningLight: '#FFFBEB',
+  error: '#EF4444',          // Coral Red
+  errorLight: '#FEF2F2',
+  background: '#F8FAFC',     // Clean slate
   surface: '#FFFFFF',
-  text: '#212121',
-  textSecondary: '#757575',
-  border: '#E0E0E0',
+  text: '#0F172A',           // Slate 900
+  textSecondary: '#64748B',  // Slate 500
+  border: '#E2E8F0',         // Slate 200
+  adminGold: '#D97706',      // Golden crown accent
 } as const;
 
 export const spacing = {
@@ -23,20 +30,21 @@ export const spacing = {
 } as const;
 
 export const borderRadius = {
-  sm: 4,
-  md: 8,
-  lg: 16,
+  sm: 6,
+  md: 12,
+  lg: 18,
   xl: 24,
+  full: 9999,
 } as const;
 
 export const typography = {
   fontSizes: {
     h1: 28,
-    h2: 24,
-    h3: 20,
-    body: 16,
-    caption: 14,
-    small: 12,
+    h2: 22,
+    h3: 18,
+    body: 15,
+    caption: 13,
+    small: 11,
   },
 } as const;
 
