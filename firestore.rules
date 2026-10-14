@@ -1,0 +1,128 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==========================================
+    // USERS
+    // Each user can only read/write their own document
+    // ==========================================
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if false; // Users cannot delete their own documents
+    }
+
+    // ==========================================
+    // GROUPS
+    // Members can read, only admin can modify
+    // ==========================================
+    match /groups/{groupId} {
+      allow read: if request.auth != null && isMemberOfGroup(groupId);
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && isAdminOfGroup(groupId);
+      allow delete: if request.auth != null && isAdminOfGroup(groupId);
+
+      // Group members subcollection
+      match /members/{memberId} {
+        allow read: if request.auth != null && isMemberOfGroup(groupId);
+        allow create: if request.auth != null && (
+          isAdminOfGroup(groupId) ||
+          request.auth.uid == memberId // User joining with invite code
+        );
+        allow update: if request.auth != null && isAdminOfGroup(groupId);
+        allow delete: if request.auth != null && (
+          isAdminOfGroup(groupId) ||
+          request.auth.uid == memberId // User leaving the group
+        );
+      }
+    }
+
+    // ==========================================
+    // PRODUCTS
+    // Members can read, admin manages, current buyer can update turn
+    // ==========================================
+    match /products/{productId} {
+      allow read: if request.auth != null && isMemberOfProductGroup(productId);
+      allow create: if request.auth != null && isAdminOfProductGroup(resource);
+      allow delete: if request.auth != null && isAdminOfProductGroup(resource);
+      allow update: if request.auth != null && (
+        isAdminOfProductGroup(resource) ||
+        isCurrentBuyerOfProduct(productId)
+      );
+
+      // Purchase history subcollection
+      match /history/{recordId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null;
+        allow update, delete: if false;
+      }
+    }
+
+    // ==========================================
+    // CLEANING TASKS
+    // Same pattern as products
+    // ==========================================
+    match /cleaningTasks/{taskId} {
+      allow read: if request.auth != null && isMemberOfTaskGroup(taskId);
+      allow create: if request.auth != null;
+      allow delete: if request.auth != null;
+      allow update: if request.auth != null;
+
+      // Cleaning history subcollection
+      match /history/{recordId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null;
+        allow update, delete: if false;
+      }
+    }
+
+    // ==========================================
+    // NOTIFICATIONS
+    // Users can only read/update their own notifications
+    // Cloud Functions can create notifications
+    // ==========================================
+    match /notifications/{notifId} {
+      allow read: if request.auth != null && 
+        resource.data.recipientUid == request.auth.uid;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && 
+        resource.data.recipientUid == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+      allow delete: if false;
+    }
+
+    // ==========================================
+    // HELPER FUNCTIONS
+    // ==========================================
+
+    function isMemberOfGroup(groupId) {
+      return exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
+    }
+
+    function isAdminOfGroup(groupId) {
+      return get(/databases/$(database)/documents/groups/$(groupId)).data.adminUid == request.auth.uid;
+    }
+
+    function isMemberOfProductGroup(productId) {
+      let product = get(/databases/$(database)/documents/products/$(productId));
+      return isMemberOfGroup(product.data.groupId);
+    }
+
+    function isAdminOfProductGroup(productResource) {
+      return isAdminOfGroup(productResource.data.groupId);
+    }
+
+    function isCurrentBuyerOfProduct(productId) {
+      let product = get(/databases/$(database)/documents/products/$(productId));
+      let currentIndex = product.data.currentTurnIndex;
+      let rotationOrder = product.data.rotationOrder;
+      return rotationOrder[currentIndex % rotationOrder.size()] == request.auth.uid;
+    }
+
+    function isMemberOfTaskGroup(taskId) {
+      let task = get(/databases/$(database)/documents/cleaningTasks/$(taskId));
+      return isMemberOfGroup(task.data.groupId);
+    }
+  }
+}
