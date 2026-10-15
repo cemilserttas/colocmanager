@@ -1,4 +1,4 @@
-export type CleaningFrequency = 'weekly' | 'biweekly' | 'monthly';
+export type CleaningFrequency = 'daily' | 'weekly' | 'biweekly' | 'monthly';
 
 /**
  * CleaningTask interface representing a scheduled household chore assigned on rotation.

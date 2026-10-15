@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { CleaningTask, CleaningRecord, CleaningFrequency } from '../types';
-import { cleaningService, calculateNextDueDate } from '../services/cleaningService';
+import { cleaningService, calculateNextDueDate, parseUserDate } from '../services/cleaningService';
 
 /**
  * State and action interface for cleaning store.
@@ -25,6 +25,14 @@ export interface CleaningState {
     frequency: CleaningFrequency,
     rotationOrder: string[],
     firstDueDate: Date | string
+  ) => Promise<void>;
+
+  /**
+   * Updates an existing cleaning chore's due date.
+   */
+  updateTaskDueDate: (
+    taskId: string,
+    nextDueDate: Date | string
   ) => Promise<void>;
 
   /**
@@ -112,8 +120,7 @@ export const useCleaningStore = create<CleaningState>((set) => ({
   ) => {
     set({ isLoading: true, error: null });
     try {
-      const dateObj =
-        firstDueDate instanceof Date ? firstDueDate : new Date(firstDueDate);
+      const dateObj = parseUserDate(firstDueDate) || new Date();
       const newTask = await cleaningService.addTask(
         groupId,
         name,
@@ -130,6 +137,26 @@ export const useCleaningStore = create<CleaningState>((set) => ({
     } catch (error: any) {
       const errorMessage =
         error?.message || "Erreur lors de l'ajout de la tâche ménagère.";
+      set({ error: errorMessage, isLoading: false });
+      throw error;
+    }
+  },
+
+  updateTaskDueDate: async (taskId: string, nextDueDate: Date | string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const parsed = parseUserDate(nextDueDate) || new Date();
+      await cleaningService.updateTaskDueDate(taskId, parsed);
+      set((state) => ({
+        tasks: state.tasks.map((t) =>
+          t.id === taskId ? { ...t, nextDueDate: parsed.toISOString() } : t
+        ),
+        isLoading: false,
+        error: null,
+      }));
+    } catch (error: any) {
+      const errorMessage =
+        error?.message || "Erreur lors de la mise à jour de la date d'échéance.";
       set({ error: errorMessage, isLoading: false });
       throw error;
     }
@@ -208,7 +235,7 @@ export const useCleaningStore = create<CleaningState>((set) => ({
           const orderLength = t.rotationOrder?.length || 1;
           const nextTurnIndex = (t.currentTurnIndex + 1) % orderLength;
           const now = new Date();
-          const nextDueDate = calculateNextDueDate(t.frequency, now);
+          const nextDueDate = calculateNextDueDate(t.frequency, t.nextDueDate || now);
 
           return {
             ...t,

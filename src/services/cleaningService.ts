@@ -23,12 +23,15 @@ const notifyCleaningSubscribers = (tasks: CleaningTask[]) => {
 
 export function calculateNextDueDate(
   frequency: CleaningFrequency,
-  baseDate: Date | string = new Date()
+  baseDate: any = new Date()
 ): Date {
-  const parsedBase = typeof baseDate === 'string' ? parseUserDate(baseDate) || new Date() : new Date(baseDate.getTime());
+  const parsedBase = parseUserDate(baseDate) || new Date();
   const next = new Date(parsedBase.getTime());
   
   switch (frequency) {
+    case 'daily':
+      next.setDate(next.getDate() + 1);
+      break;
     case 'weekly':
       next.setDate(next.getDate() + 7);
       break;
@@ -44,8 +47,12 @@ export function calculateNextDueDate(
 
   // If the calculated next due date is already in the past, roll it forward until it's in the future
   const now = Date.now();
-  while (next.getTime() <= now) {
-    if (frequency === 'monthly') {
+  let loopCount = 0;
+  while (next.getTime() <= now && loopCount < 52) {
+    loopCount++;
+    if (frequency === 'daily') {
+      next.setDate(next.getDate() + 1);
+    } else if (frequency === 'monthly') {
       next.setMonth(next.getMonth() + 1);
     } else if (frequency === 'biweekly') {
       next.setDate(next.getDate() + 14);
@@ -60,12 +67,33 @@ export function calculateNextDueDate(
 /**
  * Robust date parser supporting YYYY-MM-DD, DD/MM/YYYY, ISO, and standard date strings.
  */
-export function parseUserDate(input: string): Date | null {
+export function parseUserDate(input: any): Date | null {
   if (!input) return null;
-  const trimmed = input.trim();
+  if (input instanceof Date) {
+    return isNaN(input.getTime()) ? null : input;
+  }
+  if (typeof input === 'object' && typeof input.toDate === 'function') {
+    const d = input.toDate();
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof input === 'number') {
+    const d = new Date(input);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof input !== 'string') {
+    try {
+      const d = new Date(input);
+      return isNaN(d.getTime()) ? null : d;
+    } catch {
+      return null;
+    }
+  }
 
-  // Try YYYY-MM-DD or YYYY/MM/DD
-  const isoMatch = trimmed.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  // Try YYYY-MM-DD or YYYY/MM/DD (e.g. 2026-10-21)
+  const isoMatch = trimmed.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[T\s].*)?$/);
   if (isoMatch) {
     const year = parseInt(isoMatch[1], 10);
     const month = parseInt(isoMatch[2], 10) - 1;
@@ -74,8 +102,8 @@ export function parseUserDate(input: string): Date | null {
     if (!isNaN(d.getTime())) return d;
   }
 
-  // Try DD-MM-YYYY or DD/MM/YYYY (French standard format)
-  const frMatch = trimmed.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  // Try DD-MM-YYYY or DD/MM/YYYY (French standard format e.g. 21/10/2026)
+  const frMatch = trimmed.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})(?:[T\s].*)?$/);
   if (frMatch) {
     const day = parseInt(frMatch[1], 10);
     const month = parseInt(frMatch[2], 10) - 1;
@@ -96,11 +124,12 @@ export const cleaningService = {
     area: string,
     frequency: CleaningFrequency,
     rotationOrder: string[],
-    firstDueDate: Date | string
+    firstDueDate?: any
   ): Promise<CleaningTask> {
     const now = new Date().toISOString();
-    const dueDateStr = firstDueDate
-      ? new Date(firstDueDate).toISOString()
+    const parsedDate = parseUserDate(firstDueDate);
+    const dueDateStr = parsedDate
+      ? parsedDate.toISOString()
       : calculateNextDueDate(frequency).toISOString();
 
     if (isDemoMode()) {
@@ -255,7 +284,7 @@ export const cleaningService = {
         t.currentTurnIndex = (t.currentTurnIndex + 1) % t.rotationOrder.length;
         t.lastCleanedAt = new Date().toISOString();
         t.lastCleanedBy = cleanerUid;
-        t.nextDueDate = calculateNextDueDate(t.frequency).toISOString();
+        t.nextDueDate = calculateNextDueDate(t.frequency, t.nextDueDate).toISOString();
         await mockStorage.setCleaning(tasks);
         await mockStorage.addCleaningRecord(taskId, cleanerUid, notes);
         notifyCleaningSubscribers(tasks);
@@ -297,9 +326,41 @@ export const cleaningService = {
         t.currentTurnIndex = (t.currentTurnIndex + 1) % t.rotationOrder.length;
         t.lastCleanedAt = new Date().toISOString();
         t.lastCleanedBy = cleanerUid;
-        t.nextDueDate = calculateNextDueDate(t.frequency).toISOString();
+        t.nextDueDate = calculateNextDueDate(t.frequency, t.nextDueDate).toISOString();
         await mockStorage.setCleaning(tasks);
         await mockStorage.addCleaningRecord(taskId, cleanerUid, notes);
+        notifyCleaningSubscribers(tasks);
+      }
+    }
+  },
+
+  async updateTaskDueDate(taskId: string, nextDueDate: Date | string): Promise<void> {
+    const parsed = parseUserDate(nextDueDate) || new Date();
+    const dueDateStr = parsed.toISOString();
+
+    if (isDemoMode()) {
+      const tasks = await mockStorage.getCleaning();
+      const t = tasks.find((x) => x.id === taskId || x.taskId === taskId);
+      if (t) {
+        t.nextDueDate = dueDateStr;
+        t.updatedAt = new Date().toISOString();
+        await mockStorage.setCleaning(tasks);
+        notifyCleaningSubscribers(tasks);
+      }
+      return;
+    }
+    try {
+      await updateDoc(doc(db, 'cleaningTasks', taskId), {
+        nextDueDate: dueDateStr,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch {
+      const tasks = await mockStorage.getCleaning();
+      const t = tasks.find((x) => x.id === taskId || x.taskId === taskId);
+      if (t) {
+        t.nextDueDate = dueDateStr;
+        t.updatedAt = new Date().toISOString();
+        await mockStorage.setCleaning(tasks);
         notifyCleaningSubscribers(tasks);
       }
     }

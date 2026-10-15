@@ -139,13 +139,13 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
 
     setSubmitting(true);
     try {
-      await addTask(
-        trimmedName,
-        trimmedArea,
+      await addTask({
+        name: trimmedName,
+        area: trimmedArea,
         frequency,
-        parsedDate.toISOString(),
-        rotationOrder
-      );
+        rotationOrder,
+        nextDueDate: parsedDate,
+      });
 
       // Notify roommates in Firestore & local mobile push
       const otherMembers = members.filter((m) => (m.userId || m.id) !== user?.uid);
@@ -282,12 +282,46 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
                 setFrequency(val as CleaningFrequency);
               }}
               buttons={[
-                { value: 'weekly', label: t('weekly') || 'Hebdo' },
-                { value: 'biweekly', label: t('biweekly') || 'Bi-hebdo' },
-                { value: 'monthly', label: t('monthly') || 'Mensuelle' },
+                { value: 'daily', label: t('daily') || 'Quotidien' },
+                { value: 'weekly', label: t('weekly') || 'Hebdo (7j)' },
+                { value: 'biweekly', label: t('biweekly') || '2 sem.' },
+                { value: 'monthly', label: t('monthly') || 'Mois' },
               ]}
               style={styles.segmentedButtons}
             />
+
+            {/* Recurrence Explanation Card */}
+            <View
+              style={{
+                marginTop: spacing.sm,
+                padding: spacing.sm + 2,
+                borderRadius: 14,
+                backgroundColor: isDark ? 'rgba(2, 132, 199, 0.12)' : 'rgba(2, 132, 199, 0.08)',
+                borderWidth: 1,
+                borderColor: isDark ? 'rgba(2, 132, 199, 0.3)' : 'rgba(2, 132, 199, 0.2)',
+              }}
+            >
+              <Text style={{ fontSize: 13, color: isDark ? '#7DD3FC' : '#0369A1', lineHeight: 18, fontWeight: '500' }}>
+                🔄 <Text style={{ fontWeight: '700' }}>Répétition continue :</Text> Cette tâche débutera le{' '}
+                <Text style={{ fontWeight: '700' }}>
+                  {(() => {
+                    const d = parseUserDate(dueDateText);
+                    return d ? d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : dueDateText;
+                  })()}
+                </Text>{' '}
+                et se répètera automatiquement{' '}
+                <Text style={{ fontWeight: '700' }}>
+                  {frequency === 'daily'
+                    ? 'tous les jours'
+                    : frequency === 'weekly'
+                    ? 'chaque semaine'
+                    : frequency === 'biweekly'
+                    ? 'toutes les 2 semaines'
+                    : 'chaque mois'}
+                </Text>
+                . Dès qu'un colocataire valide le ménage, l'échéance avance automatiquement et le tour passe au colocataire suivant jusqu'à ce que vous supprimiez la tâche.
+              </Text>
+            </View>
           </View>
 
           {/* First Due Date */}
@@ -335,12 +369,26 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
 
             {/* Quick helper preview */}
             {dueDateText ? (
-              <Text variant="labelSmall" style={{ color: tokens.primary, marginBottom: 8, fontWeight: '700' }}>
-                📅 Échéance sélectionnée : {(() => {
-                  const d = parseUserDate(dueDateText);
-                  return d ? d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : 'Format invalide';
-                })()}
-              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  marginBottom: 8,
+                  paddingVertical: 6,
+                  paddingHorizontal: 10,
+                  borderRadius: 10,
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                }}
+              >
+                <Text variant="labelMedium" style={{ color: parseUserDate(dueDateText) ? (isDark ? '#34D399' : '#059669') : '#EF4444', fontWeight: '700' }}>
+                  {(() => {
+                    const d = parseUserDate(dueDateText);
+                    return d
+                      ? `✓ Début programmé : ${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`
+                      : '⚠️ Format de date non reconnu (ex: 2026-10-21 ou 21/10/2026)';
+                  })()}
+                </Text>
+              </View>
             ) : null}
 
             {/* Date presets */}

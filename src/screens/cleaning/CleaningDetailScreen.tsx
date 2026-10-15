@@ -3,6 +3,8 @@ import {
   View,
   StyleSheet,
   ScrollView,
+  TouchableOpacity,
+  Platform,
 } from 'react-native';
 import {
   Text,
@@ -14,6 +16,8 @@ import {
   ActivityIndicator,
   Avatar,
   Chip,
+  SegmentedButtons,
+  TextInput,
 } from 'react-native-paper';
 import { useAuth } from '../../hooks/useAuth';
 import { useGroup } from '../../hooks/useGroup';
@@ -22,7 +26,8 @@ import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
 import { useLanguageStore } from '../../store/useLanguageStore';
 import { soundService } from '../../services/soundService';
 import { colors, spacing, borderRadius } from '../../constants/theme';
-import { CleaningRecord, GroupMember } from '../../types';
+import { CleaningRecord, CleaningFrequency, GroupMember } from '../../types';
+import { parseUserDate } from '../../services/cleaningService';
 
 /**
  * Resolves a user ID to a member display name.
@@ -51,6 +56,8 @@ const getAreaIcon = (area: string): string => {
  */
 const formatFrequency = (freq: string): string => {
   switch (freq) {
+    case 'daily':
+      return 'Quotidienne';
     case 'weekly':
       return 'Hebdomadaire';
     case 'biweekly':
@@ -144,6 +151,16 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
 
+  // Frequency editing state
+  const [frequencyDialogVisible, setFrequencyDialogVisible] = useState(false);
+  const [tempFrequency, setTempFrequency] = useState<CleaningFrequency>(task?.frequency || 'weekly');
+  const [savingFrequency, setSavingFrequency] = useState(false);
+
+  // Due date editing state
+  const [dueDateDialogVisible, setDueDateDialogVisible] = useState(false);
+  const [tempDueDateText, setTempDueDateText] = useState('');
+  const [savingDueDate, setSavingDueDate] = useState(false);
+
   const isAdmin =
     Boolean(user?.uid) &&
     (group?.adminUid === user?.uid ||
@@ -223,6 +240,65 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
     }
   };
 
+  const handleOpenFrequency = () => {
+    soundService.playPopSound();
+    if (task) {
+      setTempFrequency(task.frequency);
+      setFrequencyDialogVisible(true);
+    }
+  };
+
+  const handleSaveFrequency = async () => {
+    soundService.playPopSound();
+    if (!task || !updateTask) return;
+    setSavingFrequency(true);
+    try {
+      await updateTask(task.id, { frequency: tempFrequency });
+      setFrequencyDialogVisible(false);
+      soundService.playSuccessSound();
+      setSnackbarMessage(`Fréquence mise à jour : ${formatFrequency(tempFrequency)}.`);
+      setSnackbarVisible(true);
+    } catch {
+      setSnackbarMessage('Erreur lors de la modification de la fréquence.');
+      setSnackbarVisible(true);
+    } finally {
+      setSavingFrequency(false);
+    }
+  };
+
+  const handleOpenDueDate = () => {
+    soundService.playPopSound();
+    if (task) {
+      const parsed = parseUserDate(task.nextDueDate);
+      setTempDueDateText(parsed ? parsed.toISOString().split('T')[0] : '');
+      setDueDateDialogVisible(true);
+    }
+  };
+
+  const handleSaveDueDate = async () => {
+    soundService.playPopSound();
+    if (!task || !updateTask) return;
+    const parsed = parseUserDate(tempDueDateText);
+    if (!parsed) {
+      setSnackbarMessage('Date invalide. Format AAAA-MM-JJ ou JJ/MM/AAAA.');
+      setSnackbarVisible(true);
+      return;
+    }
+    setSavingDueDate(true);
+    try {
+      await updateTask(task.id, { nextDueDate: parsed });
+      setDueDateDialogVisible(false);
+      soundService.playSuccessSound();
+      setSnackbarMessage("Date d'échéance mise à jour avec succès.");
+      setSnackbarVisible(true);
+    } catch {
+      setSnackbarMessage("Erreur lors de la mise à jour de l'échéance.");
+      setSnackbarVisible(true);
+    } finally {
+      setSavingDueDate(false);
+    }
+  };
+
   const handleDeleteTask = async () => {
     soundService.playPopSound();
     if (!task) return;
@@ -299,19 +375,32 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
             </Text>
 
             <View style={styles.chipsRow}>
-              <Chip
-                style={[styles.chip, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F1F5F9' }]}
-                textStyle={{ fontWeight: '600', color: tokens.text }}
+              <TouchableOpacity
+                disabled={!isAdmin}
+                onPress={handleOpenFrequency}
+                activeOpacity={0.7}
               >
-                🔁 {formatFrequency(task.frequency)}
-              </Chip>
-              <Chip
-                style={[styles.chip, overdue ? { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : '#FEF2F2' } : { backgroundColor: isDark ? 'rgba(2, 132, 199, 0.2)' : '#E0F2FE' }]}
-                textStyle={overdue ? styles.overdueChipText : { fontWeight: '600', color: '#0284C7' }}
+                <Chip
+                  style={[styles.chip, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F1F5F9' }]}
+                  textStyle={{ fontWeight: '600', color: tokens.text }}
+                >
+                  🔁 {formatFrequency(task.frequency)} {isAdmin ? '✏️' : ''}
+                </Chip>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                disabled={!isAdmin}
+                onPress={handleOpenDueDate}
+                activeOpacity={0.7}
               >
-                {overdue ? '⚠️ En retard : ' : '📅 Échéance : '}
-                {formatDate(task.nextDueDate)}
-              </Chip>
+                <Chip
+                  style={[styles.chip, overdue ? { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : '#FEF2F2' } : { backgroundColor: isDark ? 'rgba(2, 132, 199, 0.2)' : '#E0F2FE' }]}
+                  textStyle={overdue ? styles.overdueChipText : { fontWeight: '600', color: '#0284C7' }}
+                >
+                  {overdue ? '⚠️ En retard : ' : '📅 Échéance : '}
+                  {formatDate(task.nextDueDate)} {isAdmin ? '✏️' : ''}
+                </Chip>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -524,6 +613,118 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
               loading={deleting}
             >
               Supprimer
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        {/* Frequency Edit Dialog */}
+        <Dialog
+          visible={frequencyDialogVisible}
+          onDismiss={() => setFrequencyDialogVisible(false)}
+          style={{ backgroundColor: tokens.card, borderRadius: 24, borderWidth: 1, borderColor: tokens.border }}
+        >
+          <Dialog.Title style={{ color: tokens.text, fontWeight: '800' }}>Modifier la répétition</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodySmall" style={{ color: tokens.textSecondary, marginBottom: 14 }}>
+              Choisissez la nouvelle fréquence de répétition pour "{task.name}" :
+            </Text>
+            <SegmentedButtons
+              value={tempFrequency}
+              onValueChange={(val) => {
+                soundService.playPopSound();
+                setTempFrequency(val as CleaningFrequency);
+              }}
+              buttons={[
+                { value: 'daily', label: '1j' },
+                { value: 'weekly', label: '7j' },
+                { value: 'biweekly', label: '14j' },
+                { value: 'monthly', label: 'Mois' },
+              ]}
+              style={{ marginBottom: 12 }}
+            />
+            <Text variant="labelSmall" style={{ color: tokens.primary, fontWeight: '600' }}>
+              ℹ️ Répétition choisie : {formatFrequency(tempFrequency)}
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setFrequencyDialogVisible(false)} textColor={tokens.textSecondary}>Annuler</Button>
+            <Button
+              mode="contained"
+              buttonColor="#0284C7"
+              onPress={handleSaveFrequency}
+              loading={savingFrequency}
+              style={{ borderRadius: 16 }}
+            >
+              Enregistrer
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        {/* Due Date Edit Dialog */}
+        <Dialog
+          visible={dueDateDialogVisible}
+          onDismiss={() => setDueDateDialogVisible(false)}
+          style={{ backgroundColor: tokens.card, borderRadius: 24, borderWidth: 1, borderColor: tokens.border }}
+        >
+          <Dialog.Title style={{ color: tokens.text, fontWeight: '800' }}>Modifier l'échéance</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodySmall" style={{ color: tokens.textSecondary, marginBottom: 14 }}>
+              Définir la prochaine date d'échéance :
+            </Text>
+            {Platform.OS === 'web' ? (
+              <View style={{ marginBottom: 12 }}>
+                <input
+                  type="date"
+                  value={tempDueDateText}
+                  onChange={(e: any) => setTempDueDateText(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: 14,
+                    border: `1.5px solid ${tokens.border}`,
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
+                    color: tokens.text,
+                    fontSize: 15,
+                    fontWeight: 600,
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    cursor: 'pointer',
+                  }}
+                />
+              </View>
+            ) : (
+              <TextInput
+                placeholder="AAAA-MM-JJ (ex: 2026-10-21)"
+                value={tempDueDateText}
+                onChangeText={setTempDueDateText}
+                mode="outlined"
+                textColor={tokens.text}
+                style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.8)', marginBottom: 12 }}
+                outlineColor={tokens.border}
+                activeOutlineColor={tokens.accent}
+              />
+            )}
+            {tempDueDateText ? (
+              <Text variant="labelSmall" style={{ color: parseUserDate(tempDueDateText) ? (isDark ? '#34D399' : '#059669') : '#EF4444', fontWeight: '700' }}>
+                {(() => {
+                  const d = parseUserDate(tempDueDateText);
+                  return d
+                    ? `✓ Nouvelle échéance : ${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`
+                    : '⚠️ Format de date non valide';
+                })()}
+              </Text>
+            ) : null}
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setDueDateDialogVisible(false)} textColor={tokens.textSecondary}>Annuler</Button>
+            <Button
+              mode="contained"
+              buttonColor="#0284C7"
+              onPress={handleSaveDueDate}
+              loading={savingDueDate}
+              style={{ borderRadius: 16 }}
+            >
+              Enregistrer
             </Button>
           </Dialog.Actions>
         </Dialog>

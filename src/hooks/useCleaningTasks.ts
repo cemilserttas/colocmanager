@@ -3,6 +3,7 @@ import { useCleaningStore } from '../store/useCleaningStore';
 import { useGroupStore } from '../store/useGroupStore';
 import { CleaningTask, CleaningRecord, CleaningFrequency, GroupMember } from '../types';
 import { getCurrentAssignee } from '../utils/rotation';
+import { parseUserDate } from '../services/cleaningService';
 
 /**
  * Cleaning task extended with resolved current cleaner details.
@@ -29,6 +30,7 @@ export function useCleaningTasks() {
 
   const loadTasks = useCleaningStore((state) => state.loadTasks);
   const addTaskStore = useCleaningStore((state) => state.addTask);
+  const updateTaskDueDate = useCleaningStore((state) => state.updateTaskDueDate);
   const removeTask = useCleaningStore((state) => state.removeTask);
   const updateTaskFrequency = useCleaningStore((state) => state.updateTaskFrequency);
   const updateRotationOrder = useCleaningStore((state) => state.updateRotationOrder);
@@ -114,14 +116,23 @@ export function useCleaningTasks() {
       if (!group?.id) {
         throw new Error('Aucun groupe actif sélectionné.');
       }
+
+      // Safeguard: detect if rotationOrder and firstDueDate were passed in inverted order
+      let actualOrder = rotationOrder;
+      let actualDueDate = firstDueDate;
+      if (Array.isArray(firstDueDate) && (!Array.isArray(rotationOrder) || typeof rotationOrder === 'string')) {
+        actualOrder = firstDueDate as unknown as string[];
+        actualDueDate = rotationOrder as unknown as string;
+      }
+
       const order =
-        rotationOrder && rotationOrder.length > 0
-          ? rotationOrder
-          : members.map((m) => m.userId);
+        actualOrder && actualOrder.length > 0
+          ? actualOrder
+          : members.map((m) => m.userId || m.id);
 
-      const dueDate = firstDueDate ? new Date(firstDueDate) : new Date();
+      const parsed = actualDueDate ? parseUserDate(actualDueDate) || new Date() : new Date();
 
-      await addTaskStore(group.id, name, area, frequency, order, dueDate);
+      await addTaskStore(group.id, name, area, frequency, order, parsed);
     },
     [group?.id, members, addTaskStore]
   );
@@ -148,6 +159,7 @@ export function useCleaningTasks() {
     addTask,
     removeTask,
     updateTaskFrequency,
+    updateTaskDueDate,
     updateRotationOrder,
     markCleaningComplete,
     getTaskHistory,
