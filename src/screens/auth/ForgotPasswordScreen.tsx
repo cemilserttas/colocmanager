@@ -214,7 +214,11 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navi
             clearError?.();
           }}
           duration={5000}
-          style={{ backgroundColor: successMessage ? tokens.secondary : tokens.error }}
+          wrapperStyle={{ bottom: Math.max(insets.bottom, 16), zIndex: 99999 }}
+          style={{
+            backgroundColor: successMessage ? tokens.secondary : tokens.error,
+            borderRadius: 16,
+          }}
         >
           {errorMessage || authError || successMessage || ''}
         </Snackbar>

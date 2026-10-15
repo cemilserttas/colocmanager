@@ -16,6 +16,7 @@ import {
 import { db } from '../../firebase.config';
 import { Group, GroupMember } from '../types';
 import { isDemoMode, mockStorage } from './mockStorage';
+import { notificationService } from './notificationService';
 
 /**
  * Helper to race any promise against a timeout
@@ -168,6 +169,18 @@ export const groupService = {
       batch.set(userDocRef, { groupId, updatedAt: now }, { merge: true });
 
       await withTimeout(batch.commit(), 3500, null);
+
+      if (group.adminUid && group.adminUid !== userId) {
+        notificationService
+          .addNotificationToFirestore(
+            group.adminUid,
+            'member_joined',
+            '👋 Nouveau colocataire !',
+            `Un nouveau membre a rejoint la colocation "${group.name}".`,
+            groupId
+          )
+          .catch((e) => console.warn('Failed to notify admin of member join:', e));
+      }
 
       return {
         ...group,
@@ -328,6 +341,16 @@ export const groupService = {
       batch.delete(doc(db, 'groups', groupId, 'members', userId));
       batch.update(doc(db, 'users', userId), { groupId: null });
       await withTimeout(batch.commit(), 2500, null);
+
+      notificationService
+        .addNotificationToFirestore(
+          userId,
+          'member_left',
+          '👋 Départ de la colocation',
+          'Vous avez été retiré de la colocation.',
+          groupId
+        )
+        .catch((e) => console.warn('Failed to notify removed member:', e));
     } catch (error: any) {
       console.warn('Firebase error in removeMember:', error);
     }
@@ -376,6 +399,16 @@ export const groupService = {
         });
       }
       await withTimeout(batch.commit(), 3000, null);
+
+      notificationService
+        .addNotificationToFirestore(
+          newAdminUid,
+          'admin_transfer',
+          '👑 Rôle administrateur',
+          'Vous êtes désormais le nouvel administrateur de la colocation.',
+          groupId
+        )
+        .catch((e) => console.warn('Failed to notify new admin:', e));
     } catch (error: any) {
       console.warn('Firebase error in transferAdmin:', error);
     }

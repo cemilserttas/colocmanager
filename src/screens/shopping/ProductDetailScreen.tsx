@@ -3,6 +3,7 @@ import {
   View,
   StyleSheet,
   ScrollView,
+  TouchableOpacity,
 } from 'react-native';
 import {
   Text,
@@ -22,6 +23,7 @@ import { useShopping } from '../../hooks/useShopping';
 import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
 import { useLanguageStore } from '../../store/useLanguageStore';
 import { soundService } from '../../services/soundService';
+import { notificationService } from '../../services/notificationService';
 import { colors, spacing, borderRadius } from '../../constants/theme';
 import { PurchaseRecord, GroupMember } from '../../types';
 
@@ -206,6 +208,26 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
     }
   };
 
+  const handleSendReminder = async (targetUid: string, targetName: string) => {
+    soundService.playPopSound();
+    if (!product) return;
+    try {
+      await notificationService.sendPeerReminder(
+        user?.displayName || 'Un colocataire',
+        targetUid,
+        'shopping',
+        product.name,
+        product.id
+      );
+      soundService.playSuccessSound();
+      setSnackbarMessage(`✓ Rappel envoyé à ${targetName} dans Firebase !`);
+      setSnackbarVisible(true);
+    } catch {
+      setSnackbarMessage("Erreur lors de l'envoi du rappel.");
+      setSnackbarVisible(true);
+    }
+  };
+
   if (!product) {
     return (
       <View style={styles.notFoundContainer}>
@@ -331,6 +353,23 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
                         </Text>
                       )}
                     </View>
+                    {isCurrent && !isSelf && (
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => handleSendReminder(uid, memberName)}
+                        style={[
+                          styles.remindButton,
+                          {
+                            borderColor: isDark ? 'rgba(16, 185, 129, 0.4)' : '#A7F3D0',
+                            backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5',
+                          },
+                        ]}
+                      >
+                        <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#10B981' }}>
+                          🔔 Rappeler
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                   {index < rotationList.length - 1 && <Divider style={{ backgroundColor: tokens.border }} />}
                 </React.Fragment>
@@ -490,7 +529,16 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
           setSnackbarMessage(null);
         }}
         duration={3500}
-        style={styles.snackbar}
+        wrapperStyle={{ bottom: Math.max(insets.bottom, 16), zIndex: 99999 }}
+        style={{
+          backgroundColor: isDark ? 'rgba(30, 41, 59, 0.98)' : 'rgba(15, 23, 42, 0.96)',
+          borderRadius: 18,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
+          elevation: 10,
+        }}
       >
         {snackbarMessage || ''}
       </Snackbar>
@@ -603,6 +651,12 @@ const styles = StyleSheet.create({
     color: '#10B981',
     fontWeight: '700',
     marginTop: 2,
+  },
+  remindButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
   },
   historyCard: {
     borderRadius: 20,

@@ -14,6 +14,7 @@ import {
 import { db } from '../../firebase.config';
 import { Product, PurchaseRecord } from '../types';
 import { isDemoMode, mockStorage } from './mockStorage';
+import { notificationService } from './notificationService';
 
 const shoppingSubscribers = new Set<(products: Product[]) => void>();
 
@@ -147,12 +148,25 @@ export const shoppingService = {
       const products = await mockStorage.getProducts();
       const p = products.find((x) => x.id === productId || x.productId === productId);
       if (p && p.rotationOrder.length > 0) {
-        p.currentTurnIndex = (p.currentTurnIndex + 1) % p.rotationOrder.length;
+        const nextTurnIndex = (p.currentTurnIndex + 1) % p.rotationOrder.length;
+        const nextBuyerUid = p.rotationOrder[nextTurnIndex];
+        p.currentTurnIndex = nextTurnIndex;
         p.lastPurchasedAt = new Date().toISOString();
         p.lastPurchasedBy = buyerUid;
         await mockStorage.setProducts(products);
         await mockStorage.addPurchaseRecord(productId, buyerUid, notes);
         notifyShoppingSubscribers(products);
+
+        // Notify next buyer & roommates
+        if (nextBuyerUid && nextBuyerUid !== buyerUid) {
+          notificationService.addNotificationToFirestore(
+            nextBuyerUid,
+            'purchase_turn',
+            '🛒 C\'est votre tour d\'acheter !',
+            `"${p.name}" a été acheté. C'est maintenant à votre tour pour le prochain achat !`,
+            productId
+          ).catch(() => {});
+        }
       }
       return;
     }
@@ -164,6 +178,7 @@ export const shoppingService = {
 
       const product = productSnap.data() as Product;
       const nextTurnIndex = (product.currentTurnIndex + 1) % product.rotationOrder.length;
+      const nextBuyerUid = product.rotationOrder[nextTurnIndex];
       const now = new Date().toISOString();
 
       await updateDoc(productRef, {
@@ -181,6 +196,31 @@ export const shoppingService = {
         purchasedAt: now,
         ...(notes ? { notes } : {}),
       });
+
+      // 🔔 CREATE NOTIFICATIONS IN FIRESTORE
+      // 1. Notify the NEXT person in rotation: It is now their turn!
+      if (nextBuyerUid && nextBuyerUid !== buyerUid) {
+        notificationService.addNotificationToFirestore(
+          nextBuyerUid,
+          'purchase_turn',
+          '🛒 C\'est votre tour d\'acheter !',
+          `"${product.name}" a été acheté. C'est maintenant à votre tour pour le prochain achat !`,
+          productId
+        ).catch((e) => console.warn('Turn notification error:', e));
+      }
+
+      // 2. Notify all other roommates in rotation that purchase was completed
+      for (const uid of product.rotationOrder) {
+        if (uid !== buyerUid && uid !== nextBuyerUid) {
+          notificationService.addNotificationToFirestore(
+            uid,
+            'shopping',
+            '🛒 Achat enregistré',
+            `Un colocataire a acheté "${product.name}".`,
+            productId
+          ).catch(() => {});
+        }
+      }
     } catch {
       const products = await mockStorage.getProducts();
       const p = products.find((x) => x.id === productId || x.productId === productId);

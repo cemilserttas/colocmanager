@@ -6,7 +6,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { User, Group, GroupMember, Product, CleaningTask, PurchaseRecord, CleaningRecord } from '../types';
+import { User, Group, GroupMember, Product, CleaningTask, PurchaseRecord, CleaningRecord, AppNotification } from '../types';
 import { firebaseConfig } from '../../firebase.config';
 
 export const isDemoMode = (): boolean => {
@@ -21,6 +21,7 @@ const STORAGE_KEYS = {
   CLEANING: '@coloc_mock_cleaning',
   PURCHASE_HISTORY: '@coloc_mock_purchase_history',
   CLEANING_HISTORY: '@coloc_mock_cleaning_history',
+  NOTIFICATIONS: '@coloc_mock_notifications',
 };
 
 // Default seed data for immediate demonstration
@@ -305,6 +306,28 @@ export const mockStorage = {
       `${STORAGE_KEYS.CLEANING_HISTORY}_${taskId}`,
       JSON.stringify(history)
     );
+  },
+
+  async getNotifications(userId?: string): Promise<AppNotification[]> {
+    const raw = await AsyncStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
+    const list: AppNotification[] = raw ? JSON.parse(raw) : [];
+    if (!userId) return list;
+    return list.filter((n) => n.recipientUid === userId);
+  },
+
+  async addNotification(notif: AppNotification): Promise<void> {
+    const list = await this.getNotifications();
+    list.unshift(notif);
+    await AsyncStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(list));
+  },
+
+  async markNotificationRead(notifId: string): Promise<void> {
+    const list = await this.getNotifications();
+    const target = list.find((n) => n.id === notifId);
+    if (target) {
+      target.isRead = true;
+      await AsyncStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(list));
+    }
   },
 
   async clearAll(): Promise<void> {

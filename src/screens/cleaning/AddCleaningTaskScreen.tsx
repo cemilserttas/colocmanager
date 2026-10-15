@@ -150,7 +150,21 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
       });
 
       // Notify roommates in Firestore & local mobile push
-      const otherMembers = members.filter((m) => (m.userId || m.id) !== user?.uid);
+      const firstCleanerUid = rotationOrder[0];
+      if (firstCleanerUid) {
+        try {
+          await notificationService.addNotificationToFirestore(
+            firstCleanerUid,
+            'cleaning_turn',
+            '🧹 C\'est votre tour pour le ménage !',
+            `La tâche "${trimmedName}" (${trimmedArea}) a été planifiée. Vous êtes le premier assigné (échéance : ${dueDateText}) !`
+          );
+        } catch {}
+      }
+
+      const otherMembers = members.filter(
+        (m) => (m.userId || m.id) !== user?.uid && (m.userId || m.id) !== firstCleanerUid
+      );
       for (const m of otherMembers) {
         const uid = m.userId || m.id;
         try {
@@ -536,7 +550,8 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
           setErrorMessage(null);
         }}
         duration={3500}
-        style={styles.snackbar}
+        wrapperStyle={{ bottom: Math.max(insets.bottom, 16), zIndex: 99999 }}
+        style={{ backgroundColor: tokens.error, borderRadius: 16 }}
       >
         {errorMessage || ''}
       </Snackbar>

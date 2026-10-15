@@ -26,6 +26,7 @@ import { useCleaning } from '../../hooks/useCleaning';
 import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
 import { useLanguageStore } from '../../store/useLanguageStore';
 import { soundService } from '../../services/soundService';
+import { notificationService } from '../../services/notificationService';
 import { colors, spacing, borderRadius } from '../../constants/theme';
 import { CleaningRecord, CleaningFrequency, GroupMember } from '../../types';
 import { parseUserDate } from '../../services/cleaningService';
@@ -318,6 +319,26 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
     }
   };
 
+  const handleSendReminder = async (targetUid: string, targetName: string) => {
+    soundService.playPopSound();
+    if (!task) return;
+    try {
+      await notificationService.sendPeerReminder(
+        user?.displayName || 'Un colocataire',
+        targetUid,
+        'cleaning',
+        task.name,
+        task.id
+      );
+      soundService.playSuccessSound();
+      setSnackbarMessage(`✓ Rappel ménage envoyé à ${targetName} dans Firebase !`);
+      setSnackbarVisible(true);
+    } catch {
+      setSnackbarMessage("Erreur lors de l'envoi du rappel.");
+      setSnackbarVisible(true);
+    }
+  };
+
   if (!task) {
     return (
       <View style={[styles.notFoundContainer, { backgroundColor: tokens.bg }]}>
@@ -481,6 +502,23 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
                         </Text>
                       )}
                     </View>
+                    {isCurrent && !isSelf && (
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => handleSendReminder(uid, memberName)}
+                        style={[
+                          styles.remindButton,
+                          {
+                            borderColor: isDark ? 'rgba(2, 132, 199, 0.4)' : '#BAE6FD',
+                            backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : '#F0F9FF',
+                          },
+                        ]}
+                      >
+                        <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0284C7' }}>
+                          🔔 Rappeler
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                   {index < rotationList.length - 1 && <Divider style={{ backgroundColor: tokens.border }} />}
                 </React.Fragment>
@@ -752,7 +790,16 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
           setSnackbarMessage(null);
         }}
         duration={3500}
-        style={styles.snackbar}
+        wrapperStyle={{ bottom: Math.max(insets.bottom, 16), zIndex: 99999 }}
+        style={{
+          backgroundColor: isDark ? 'rgba(30, 41, 59, 0.98)' : 'rgba(15, 23, 42, 0.96)',
+          borderRadius: 18,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
+          elevation: 10,
+        }}
       >
         {snackbarMessage || ''}
       </Snackbar>
@@ -879,6 +926,12 @@ const styles = StyleSheet.create({
     color: '#0284C7',
     fontWeight: '700',
     marginTop: 2,
+  },
+  remindButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
   },
   historyCard: {
     borderRadius: 20,

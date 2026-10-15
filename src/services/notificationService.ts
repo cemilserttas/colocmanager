@@ -14,7 +14,8 @@ import {
   onSnapshot,
 } from 'firebase/firestore';
 import { db } from '../../firebase.config';
-import { AppNotification, NotificationType } from '../types';
+import { AppNotification, NotificationType, Product, CleaningTask } from '../types';
+import { isDemoMode, mockStorage } from './mockStorage';
 
 /**
  * Service managing push tokens, local scheduled notifications,
@@ -193,23 +194,32 @@ export const notificationService = {
     body: string,
     referenceId?: string
   ): Promise<void> {
+    const notifId = `notif-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const newNotification: AppNotification = {
+      id: notifId,
+      notifId,
+      recipientUid,
+      type,
+      title,
+      body,
+      ...(referenceId ? { referenceId } : {}),
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    if (isDemoMode()) {
+      await mockStorage.addNotification(newNotification);
+      return;
+    }
+
     try {
       const notifRef = doc(collection(db, 'notifications'));
-      const newNotification: AppNotification = {
-        id: notifRef.id,
-        recipientUid,
-        type,
-        title,
-        body,
-        ...(referenceId ? { referenceId } : {}),
-        isRead: false,
-        createdAt: new Date().toISOString(),
-      };
-
+      newNotification.id = notifRef.id;
+      newNotification.notifId = notifRef.id;
       await setDoc(notifRef, newNotification);
     } catch (error: any) {
-      console.error('Error adding notification to Firestore:', error);
-      throw error;
+      console.warn('Firestore notification insert fallback to local storage:', error);
+      await mockStorage.addNotification(newNotification);
     }
   },
 
@@ -220,6 +230,10 @@ export const notificationService = {
    * @returns Array of AppNotification objects
    */
   async getNotifications(userId: string): Promise<AppNotification[]> {
+    if (isDemoMode()) {
+      return await mockStorage.getNotifications(userId);
+    }
+
     try {
       const q = query(
         collection(db, 'notifications'),
@@ -247,8 +261,8 @@ export const notificationService = {
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
       } catch (fallbackError: any) {
-        console.error(`Error fetching notifications for ${userId}:`, fallbackError);
-        throw fallbackError;
+        console.warn(`Firestore notification fetch fallback to local for ${userId}:`, fallbackError);
+        return await mockStorage.getNotifications(userId);
       }
     }
   },
@@ -259,15 +273,131 @@ export const notificationService = {
    * @param notifId - The unique notification document ID
    */
   async markNotificationRead(notifId: string): Promise<void> {
+    if (isDemoMode()) {
+      await mockStorage.markNotificationRead(notifId);
+      return;
+    }
+
     try {
       const notifRef = doc(db, 'notifications', notifId);
       await updateDoc(notifRef, {
         isRead: true,
       });
     } catch (error: any) {
-      console.error(`Error marking notification ${notifId} as read:`, error);
-      throw error;
+      console.warn(`Fallback marking notification read for ${notifId}:`, error);
+      await mockStorage.markNotificationRead(notifId);
     }
+  },
+
+  /**
+   * Automatically generates reminder notifications in Firestore
+   * for the user's upcoming/overdue tasks or shopping turns.
+   */
+  async checkAndGenerateReminders(
+    userId: string,
+    groupId: string,
+    products: Product[] = [],
+    tasks: CleaningTask[] = []
+  ): Promise<void> {
+    if (!userId) return;
+
+    try {
+      // Get recent notifications for this user to avoid duplicating reminders in the last 24h
+      const existingNotifs = await notificationService.getNotifications(userId);
+      const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+
+      // 1. Check shopping items where it's currently userId's turn
+      for (const p of products) {
+        if (!p.isActive || !p.rotationOrder || p.rotationOrder.length === 0) continue;
+        const currentBuyer = p.rotationOrder[p.currentTurnIndex % p.rotationOrder.length];
+        if (currentBuyer === userId) {
+          const hasRecentReminder = existingNotifs.some((n) => {
+            const notifTime = new Date(n.createdAt).getTime();
+            return (
+              n.referenceId === p.id &&
+              (n.type === 'reminder' || n.type === 'purchase_turn') &&
+              notifTime > oneDayAgo
+            );
+          });
+
+          if (!hasRecentReminder) {
+            await notificationService.addNotificationToFirestore(
+              userId,
+              'reminder',
+              '⏰ Rappel d\'achat !',
+              `C'est votre tour d'acheter : "${p.name}". Pensez-y lors de vos courses !`,
+              p.id
+            );
+          }
+        }
+      }
+
+      // 2. Check cleaning tasks where it's currently userId's turn and due soon or overdue
+      for (const t of tasks) {
+        if (!t.isActive || !t.rotationOrder || t.rotationOrder.length === 0) continue;
+        const currentCleaner = t.rotationOrder[t.currentTurnIndex % t.rotationOrder.length];
+        if (currentCleaner === userId && t.nextDueDate) {
+          const dueDate = new Date(t.nextDueDate).getTime();
+          const isOverdue = dueDate < Date.now();
+          const isDueSoon = dueDate - Date.now() < 2 * 24 * 60 * 60 * 1000; // within 48h
+
+          if (isOverdue || isDueSoon) {
+            const hasRecentReminder = existingNotifs.some((n) => {
+              const notifTime = new Date(n.createdAt).getTime();
+              return (
+                n.referenceId === t.id &&
+                (n.type === 'reminder' || n.type === 'cleaning_turn') &&
+                notifTime > oneDayAgo
+              );
+            });
+
+            if (!hasRecentReminder) {
+              const formattedDate = new Date(t.nextDueDate).toLocaleDateString('fr-FR', {
+                day: 'numeric',
+                month: 'short',
+              });
+
+              await notificationService.addNotificationToFirestore(
+                userId,
+                'reminder',
+                isOverdue ? '🚨 Tâche en retard !' : '⏰ Rappel de ménage !',
+                isOverdue
+                  ? `La tâche "${t.name}" (${t.area}) est en retard ! Pensez à l'effectuer dès que possible.`
+                  : `N'oubliez pas : votre tâche "${t.name}" (${t.area}) est prévue pour le ${formattedDate}.`,
+                t.id
+              );
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Error running checkAndGenerateReminders:', err);
+    }
+  },
+
+  /**
+   * Sends an immediate peer reminder to a roommate from another roommate/admin.
+   */
+  async sendPeerReminder(
+    senderName: string,
+    recipientUid: string,
+    itemType: 'shopping' | 'cleaning',
+    itemName: string,
+    itemId: string
+  ): Promise<void> {
+    const title = '⏰ Rappel amical de colocation';
+    const body =
+      itemType === 'shopping'
+        ? `${senderName} vous rappelle gentiment qu'il faut acheter "${itemName}".`
+        : `${senderName} vous rappelle gentiment qu'il faut effectuer la tâche "${itemName}".`;
+
+    await notificationService.addNotificationToFirestore(
+      recipientUid,
+      'reminder',
+      title,
+      body,
+      itemId
+    );
   },
 
   /**

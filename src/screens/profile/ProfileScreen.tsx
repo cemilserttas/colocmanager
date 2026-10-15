@@ -674,7 +674,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
         </Dialog>
       </Portal>
 
-      {/* Snackbar Feedback */}
+      {/* Snackbar Feedback - floats cleanly above the bottom navigation bar */}
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => {
@@ -682,7 +682,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
           setSnackbarMessage(null);
         }}
         duration={3500}
-        style={{ backgroundColor: tokens.text }}
+        wrapperStyle={{ bottom: 88 + insets.bottom, zIndex: 99999 }}
+        style={{
+          backgroundColor: isDark ? 'rgba(30, 41, 59, 0.98)' : 'rgba(15, 23, 42, 0.96)',
+          borderRadius: 18,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
+          elevation: 10,
+        }}
       >
         {snackbarMessage || ''}
       </Snackbar>

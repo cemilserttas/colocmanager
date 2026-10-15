@@ -450,7 +450,16 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
           setSnackbarMessage(null);
         }}
         duration={3500}
-        style={{ backgroundColor: tokens.text }}
+        wrapperStyle={{ bottom: Math.max(insets.bottom, 16), zIndex: 99999 }}
+        style={{
+          backgroundColor: isDark ? 'rgba(30, 41, 59, 0.98)' : 'rgba(15, 23, 42, 0.96)',
+          borderRadius: 18,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
+          elevation: 10,
+        }}
       >
         {snackbarMessage || groupError || ''}
       </Snackbar>

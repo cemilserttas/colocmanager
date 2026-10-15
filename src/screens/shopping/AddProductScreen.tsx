@@ -116,7 +116,21 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
       await addProduct(trimmedName, selectedIcon, rotationOrder);
 
       // Notify roommates in Firestore & mobile push
-      const otherMembers = members.filter((m) => (m.userId || m.id) !== user?.uid);
+      const firstBuyerUid = rotationOrder[0];
+      if (firstBuyerUid) {
+        try {
+          await notificationService.addNotificationToFirestore(
+            firstBuyerUid,
+            'purchase_turn',
+            '🛒 C\'est votre tour d\'acheter !',
+            `Le produit "${trimmedName}" a été ajouté. Vous êtes le premier responsable de cet achat !`
+          );
+        } catch {}
+      }
+
+      const otherMembers = members.filter(
+        (m) => (m.userId || m.id) !== user?.uid && (m.userId || m.id) !== firstBuyerUid
+      );
       for (const m of otherMembers) {
         const uid = m.userId || m.id;
         try {
@@ -352,7 +366,8 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
           setErrorMessage(null);
         }}
         duration={3500}
-        style={{ backgroundColor: tokens.error }}
+        wrapperStyle={{ bottom: Math.max(insets.bottom, 16), zIndex: 99999 }}
+        style={{ backgroundColor: tokens.error, borderRadius: 16 }}
       >
         {errorMessage || ''}
       </Snackbar>

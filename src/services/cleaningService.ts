@@ -14,6 +14,7 @@ import {
 import { db } from '../../firebase.config';
 import { CleaningTask, CleaningRecord, CleaningFrequency } from '../types';
 import { isDemoMode, mockStorage } from './mockStorage';
+import { notificationService } from './notificationService';
 
 const cleaningSubscribers = new Set<(tasks: CleaningTask[]) => void>();
 
@@ -281,13 +282,27 @@ export const cleaningService = {
       const tasks = await mockStorage.getCleaning();
       const t = tasks.find((x) => x.id === taskId || x.taskId === taskId);
       if (t && t.rotationOrder.length > 0) {
-        t.currentTurnIndex = (t.currentTurnIndex + 1) % t.rotationOrder.length;
+        const nextTurnIndex = (t.currentTurnIndex + 1) % t.rotationOrder.length;
+        const nextDueDate = calculateNextDueDate(t.frequency, t.nextDueDate).toISOString();
+        const nextCleanerUid = t.rotationOrder[nextTurnIndex];
+        t.currentTurnIndex = nextTurnIndex;
         t.lastCleanedAt = new Date().toISOString();
         t.lastCleanedBy = cleanerUid;
-        t.nextDueDate = calculateNextDueDate(t.frequency, t.nextDueDate).toISOString();
+        t.nextDueDate = nextDueDate;
         await mockStorage.setCleaning(tasks);
         await mockStorage.addCleaningRecord(taskId, cleanerUid, notes);
         notifyCleaningSubscribers(tasks);
+
+        // Notify next cleaner
+        if (nextCleanerUid && nextCleanerUid !== cleanerUid) {
+          notificationService.addNotificationToFirestore(
+            nextCleanerUid,
+            'cleaning_turn',
+            '🧹 C\'est votre tour pour le ménage !',
+            `Le ménage "${t.name}" (${t.area}) a été validé. C'est maintenant à votre tour !`,
+            taskId
+          ).catch(() => {});
+        }
       }
       return;
     }
@@ -300,6 +315,7 @@ export const cleaningService = {
       const task = taskSnap.data() as CleaningTask;
       const nextTurnIndex = (task.currentTurnIndex + 1) % task.rotationOrder.length;
       const nextDueDate = calculateNextDueDate(task.frequency, task.nextDueDate);
+      const nextCleanerUid = task.rotationOrder[nextTurnIndex];
       const now = new Date().toISOString();
 
       await updateDoc(taskRef, {
@@ -319,6 +335,36 @@ export const cleaningService = {
         completedAt: now,
         ...(notes ? { notes } : {}),
       });
+
+      const formattedDueDate = nextDueDate.toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'short',
+      });
+
+      // 🔔 CREATE NOTIFICATIONS IN FIRESTORE
+      // 1. Notify the NEXT person in rotation: It is now their turn!
+      if (nextCleanerUid && nextCleanerUid !== cleanerUid) {
+        notificationService.addNotificationToFirestore(
+          nextCleanerUid,
+          'cleaning_turn',
+          '🧹 C\'est votre tour pour le ménage !',
+          `Le ménage "${task.name}" (${task.area}) a été validé. C'est maintenant à votre tour d'ici le ${formattedDueDate} !`,
+          taskId
+        ).catch((e) => console.warn('Cleaning turn notification error:', e));
+      }
+
+      // 2. Notify all other roommates
+      for (const uid of task.rotationOrder) {
+        if (uid !== cleanerUid && uid !== nextCleanerUid) {
+          notificationService.addNotificationToFirestore(
+            uid,
+            'cleaning',
+            '✨ Ménage validé !',
+            `Le ménage "${task.name}" (${task.area}) a été effectué avec succès.`,
+            taskId
+          ).catch(() => {});
+        }
+      }
     } catch {
       const tasks = await mockStorage.getCleaning();
       const t = tasks.find((x) => x.id === taskId || x.taskId === taskId);

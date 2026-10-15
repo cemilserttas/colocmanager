@@ -23,6 +23,7 @@ import { useCleaning } from '../../hooks/useCleaning';
 import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
 import { useLanguageStore } from '../../store/useLanguageStore';
 import { soundService } from '../../services/soundService';
+import { notificationService } from '../../services/notificationService';
 import { NotificationBell } from '../../components/common/NotificationBell';
 import { GroupMember, SystemBroadcast } from '../../types';
 import { adminService } from '../../services/adminService';
@@ -105,6 +106,13 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
     }).catch(() => {});
   }, []);
 
+  // Check and generate reminder notifications in Firestore for user turns & due chores
+  React.useEffect(() => {
+    if (user?.uid && group?.id && (products.length > 0 || tasks.length > 0)) {
+      notificationService.checkAndGenerateReminders(user.uid, group.id, products, tasks).catch(() => {});
+    }
+  }, [user?.uid, group?.id, products.length, tasks.length]);
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -112,11 +120,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
         fetchProducts ? fetchProducts() : Promise.resolve(),
         fetchTasks ? fetchTasks() : Promise.resolve(),
         adminService.getBroadcasts().then((b) => setBroadcasts(b.filter((item) => item.active))).catch(() => {}),
+        user?.uid && group?.id
+          ? notificationService.checkAndGenerateReminders(user.uid, group.id, products, tasks).catch(() => {})
+          : Promise.resolve(),
       ]);
     } finally {
       setRefreshing(false);
     }
-  }, [fetchProducts, fetchTasks]);
+  }, [fetchProducts, fetchTasks, user?.uid, group?.id, products, tasks]);
 
   const myShoppingTasks = products.filter((p) => {
     if (!p.isActive || !p.rotationOrder || p.rotationOrder.length === 0) return false;
@@ -564,15 +575,24 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
         </View>
       </ScrollView>
 
-      {/* Snackbar feedback */}
+      {/* Snackbar feedback - floats cleanly above the bottom navigation bar */}
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => {
           setSnackbarVisible(false);
           setSnackbarMessage(null);
         }}
-        duration={3000}
-        style={{ backgroundColor: tokens.text }}
+        duration={3200}
+        wrapperStyle={{ bottom: 88 + insets.bottom, zIndex: 99999 }}
+        style={{
+          backgroundColor: isDark ? 'rgba(30, 41, 59, 0.98)' : 'rgba(15, 23, 42, 0.96)',
+          borderRadius: 18,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
+          elevation: 10,
+        }}
       >
         {snackbarMessage || ''}
       </Snackbar>
