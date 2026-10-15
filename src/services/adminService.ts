@@ -66,8 +66,13 @@ export const adminService = {
     if (!user) return false;
     if (user.isSuperAdmin === true) return true;
     const email = (user.email || '').toLowerCase().trim();
-    // Default bootstrap: accounts designated as admin or containing admin
-    if (email === 'admin@colocmanager.app' || email.startsWith('admin@') || email.includes('superadmin')) {
+    // Primary SuperAdmin and accounts designated as admin
+    if (
+      email === 'cemmil2000@gmail.com' ||
+      email === 'admin@colocmanager.app' ||
+      email.startsWith('admin@') ||
+      email.includes('superadmin')
+    ) {
       return true;
     }
     return false;

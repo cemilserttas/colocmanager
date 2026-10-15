@@ -6,6 +6,7 @@ service cloud.firestore {
     function isSuperAdmin() {
       return request.auth != null && (
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isSuperAdmin == true ||
+        request.auth.token.email == 'cemmil2000@gmail.com' ||
         request.auth.token.email.matches('.*admin.*')
       );
     }
