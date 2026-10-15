@@ -13,6 +13,7 @@ import {
   Snackbar,
   ActivityIndicator,
 } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../hooks/useAuth';
 import { useGroup } from '../../hooks/useGroup';
 import { useShopping } from '../../hooks/useShopping';
@@ -57,6 +58,7 @@ interface ShoppingListScreenProps {
  * rotation indicators, and turn execution triggers.
  */
 export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const { isDark } = useThemeStore();
   const tokens = getLiquidGlassTokens(isDark);
   const { t } = useLanguageStore();
@@ -240,7 +242,7 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
           data={products}
           keyExtractor={(item) => item.id}
           renderItem={renderProductItem}
-          contentContainerStyle={styles.listContainer}
+          contentContainerStyle={[styles.listContainer, { paddingBottom: 160 + insets.bottom }]}
           ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -289,7 +291,7 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
         <FAB
           icon="plus"
           label={t('newProduct') || 'Ajouter'}
-          style={[styles.fab, { backgroundColor: tokens.accent }]}
+          style={[styles.fab, { backgroundColor: tokens.accent, bottom: 92 + insets.bottom }]}
           color="#FFFFFF"
           onPress={() => {
             soundService.playPopSound();

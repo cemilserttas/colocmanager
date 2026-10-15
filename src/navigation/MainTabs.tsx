@@ -8,6 +8,8 @@ import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from 'react-native-paper';
 import { MainTabParamList, ShoppingStackParamList, CleaningStackParamList, ProfileStackParamList } from './types';
 import { useThemeStore, getLiquidGlassTokens } from '../store/useThemeStore';
@@ -51,12 +53,12 @@ const ShoppingNavigator: React.FC = () => {
       <ShoppingStack.Screen
         name="ProductDetail"
         component={ProductDetailScreen}
-        options={{ headerTitle: 'Détail produit' }}
+        options={{ headerShown: false }}
       />
       <ShoppingStack.Screen
         name="AddProduct"
         component={AddProductScreen}
-        options={{ headerTitle: t('addProductTitle') }}
+        options={{ headerShown: false }}
       />
     </ShoppingStack.Navigator>
   );
@@ -87,12 +89,12 @@ const CleaningNavigator: React.FC = () => {
       <CleaningStack.Screen
         name="CleaningDetail"
         component={CleaningDetailScreen}
-        options={{ headerTitle: 'Détail tâche' }}
+        options={{ headerShown: false }}
       />
       <CleaningStack.Screen
         name="AddCleaningTask"
         component={AddCleaningTaskScreen}
-        options={{ headerTitle: t('addChoreTitle') }}
+        options={{ headerShown: false }}
       />
     </CleaningStack.Navigator>
   );
@@ -123,7 +125,7 @@ const ProfileNavigator: React.FC = () => {
       <ProfileStack.Screen
         name="ManageMembers"
         component={ManageMembersScreen}
-        options={{ headerTitle: t('membersTitle') }}
+        options={{ headerShown: false }}
       />
       <ProfileStack.Screen
         name="AdminPortal"
@@ -136,9 +138,26 @@ const ProfileNavigator: React.FC = () => {
 
 // Custom Apple Liquid Glass Tab Bar
 function LiquidGlassTabBar({ state, descriptors, navigation }: any) {
+  const insets = useSafeAreaInsets();
   const { isDark } = useThemeStore();
   const tokens = getLiquidGlassTokens(isDark);
   const { t } = useLanguageStore();
+
+  const currentRoute = state.routes[state.index];
+  const focusedRouteName = getFocusedRouteNameFromRoute(currentRoute);
+
+  const hiddenScreens = [
+    'ProductDetail',
+    'AddProduct',
+    'CleaningDetail',
+    'AddCleaningTask',
+    'ManageMembers',
+    'AdminPortal',
+  ];
+
+  if (focusedRouteName && hiddenScreens.includes(focusedRouteName)) {
+    return null;
+  }
 
   const tabLabels: Record<string, { labelKey: any; emoji: string }> = {
     Dashboard: { labelKey: 'home', emoji: '🏠' },
@@ -147,13 +166,15 @@ function LiquidGlassTabBar({ state, descriptors, navigation }: any) {
     Profile: { labelKey: 'profile', emoji: '👤' },
   };
 
+  const bottomOffset = (Platform.OS === 'web' ? 16 : 12) + insets.bottom;
+
   return (
-    <View style={styles.floatingBarWrapper}>
+    <View style={[styles.floatingBarWrapper, { bottom: bottomOffset }]}>
       <View
         style={[
           styles.floatingBarPill,
           {
-            backgroundColor: isDark ? 'rgba(18, 20, 30, 0.88)' : 'rgba(255, 255, 255, 0.92)',
+            backgroundColor: isDark ? 'rgba(20, 24, 38, 0.96)' : 'rgba(255, 255, 255, 0.97)',
             borderColor: tokens.border,
             shadowColor: isDark ? '#000' : '#64748B',
           },
@@ -261,7 +282,6 @@ const MainTabs: React.FC = () => {
 const styles = StyleSheet.create({
   floatingBarWrapper: {
     position: 'absolute',
-    bottom: Platform.OS === 'web' ? 16 : 24,
     left: 0,
     right: 0,
     alignItems: 'center',
@@ -280,24 +300,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderWidth: 1.5,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.18,
     shadowRadius: 18,
     elevation: 8,
   },
   tabItem: {
     flex: 1,
-    height: 48,
+    height: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 24,
-    paddingVertical: 4,
-    marginHorizontal: 3,
+    borderRadius: 25,
+    paddingVertical: 2,
+    marginHorizontal: 2,
   },
   activeBubble: {
-    borderWidth: 1,
+    borderWidth: 1.2,
     shadowColor: '#0A84FF',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 6,
   },
   tabEmoji: {
@@ -305,11 +325,11 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   tabEmojiFocused: {
-    transform: [{ scale: 1.15 }],
+    transform: [{ scale: 1.1 }],
   },
   tabLabel: {
     fontSize: 11,
-    letterSpacing: 0.2,
+    letterSpacing: 0.1,
   },
 });
 

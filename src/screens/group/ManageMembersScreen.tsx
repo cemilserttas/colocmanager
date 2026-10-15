@@ -17,6 +17,7 @@ import {
   Divider,
 } from 'react-native-paper';
 import * as Clipboard from 'expo-clipboard';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../hooks/useAuth';
 import { useGroup } from '../../hooks/useGroup';
 import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
@@ -35,6 +36,7 @@ interface ManageMembersScreenProps {
  * transfer administrator role to another member, and share invite codes.
  */
 export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const { isDark } = useThemeStore();
   const tokens = getLiquidGlassTokens(isDark);
   const { t } = useLanguageStore();
@@ -149,6 +151,7 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
           <Avatar.Text
             size={44}
             label={initial}
+            color={isMemberAdmin ? '#451A03' : '#FFFFFF'}
             style={{
               backgroundColor: isMemberAdmin ? tokens.adminGold : tokens.primary,
             }}
@@ -222,7 +225,16 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
     <View style={[styles.container, { backgroundColor: tokens.bg }]}>
       <View style={styles.contentWrapper}>
         {/* Header Bar */}
-        <View style={[styles.header, { backgroundColor: tokens.surface, borderColor: tokens.border }]}>
+        <View
+          style={[
+            styles.header,
+            {
+              backgroundColor: tokens.surface,
+              borderColor: tokens.border,
+              paddingTop: Math.max(insets.top, 12),
+            },
+          ]}
+        >
           <Button
             mode="text"
             onPress={() => navigation.goBack()}
@@ -288,6 +300,7 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
             {
               backgroundColor: tokens.surface,
               borderColor: tokens.border,
+              paddingBottom: 24 + insets.bottom,
             },
           ]}
         >

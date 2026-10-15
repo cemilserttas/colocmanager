@@ -16,6 +16,7 @@ import {
   Avatar,
   Divider,
 } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import { useAuth } from '../../hooks/useAuth';
 import { useGroup } from '../../hooks/useGroup';
@@ -58,6 +59,7 @@ interface AddCleaningTaskScreenProps {
 export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
   navigation,
 }) => {
+  const insets = useSafeAreaInsets();
   const { isDark } = useThemeStore();
   const tokens = getLiquidGlassTokens(isDark);
   const { t } = useLanguageStore();
@@ -214,7 +216,16 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
     >
       <View style={styles.contentWrapper}>
         {/* Liquid Glass Header */}
-        <View style={[styles.topBar, { backgroundColor: tokens.surface, borderBottomColor: tokens.border }]}>
+        <View
+          style={[
+            styles.topBar,
+            {
+              backgroundColor: tokens.surface,
+              borderBottomColor: tokens.border,
+              paddingTop: Math.max(insets.top, 12),
+            },
+          ]}
+        >
           <Button
             mode="text"
             onPress={() => {
@@ -233,7 +244,7 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
         </View>
 
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: 50 + insets.bottom }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >

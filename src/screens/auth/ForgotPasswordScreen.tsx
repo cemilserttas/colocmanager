@@ -13,6 +13,7 @@ import {
   Snackbar,
   IconButton,
 } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../hooks/useAuth';
 import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
 import { soundService } from '../../services/soundService';
@@ -28,6 +29,7 @@ interface ForgotPasswordScreenProps {
  * Apple Liquid Glass Forgot Password Screen
  */
 export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const { isDark } = useThemeStore();
   const tokens = getLiquidGlassTokens(isDark);
   const { resetPassword, loading, error: authError, clearError } = useAuth();
@@ -71,7 +73,13 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navi
       style={[styles.flexContainer, { backgroundColor: tokens.bg }]}
     >
       <ScrollView
-        contentContainerStyle={styles.scrollContainer}
+        contentContainerStyle={[
+          styles.scrollContainer,
+          {
+            paddingTop: Math.max(insets.top, 24),
+            paddingBottom: 24 + insets.bottom,
+          },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >

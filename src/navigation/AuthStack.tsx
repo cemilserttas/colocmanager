@@ -26,9 +26,7 @@ const AuthStack: React.FC = () => {
         name="ForgotPassword"
         component={ForgotPasswordScreen}
         options={{
-          headerShown: true,
-          headerTitle: 'Mot de passe oublié',
-          headerBackTitle: 'Retour',
+          headerShown: false,
         }}
       />
     </Stack.Navigator>

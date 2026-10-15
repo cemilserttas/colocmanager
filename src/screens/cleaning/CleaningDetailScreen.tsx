@@ -19,6 +19,7 @@ import {
   SegmentedButtons,
   TextInput,
 } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../hooks/useAuth';
 import { useGroup } from '../../hooks/useGroup';
 import { useCleaning } from '../../hooks/useCleaning';
@@ -119,6 +120,7 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
   route,
   navigation,
 }) => {
+  const insets = useSafeAreaInsets();
   const { isDark } = useThemeStore();
   const tokens = getLiquidGlassTokens(isDark);
   const { t } = useLanguageStore();
@@ -343,7 +345,16 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
     <View style={[styles.container, { backgroundColor: tokens.bg }]}>
       <View style={styles.contentWrapper}>
         {/* Top Header */}
-        <View style={[styles.topBar, { backgroundColor: tokens.surface, borderBottomColor: tokens.border }]}>
+        <View
+          style={[
+            styles.topBar,
+            {
+              backgroundColor: tokens.surface,
+              borderBottomColor: tokens.border,
+              paddingTop: Math.max(insets.top, 12),
+            },
+          ]}
+        >
           <Button
             mode="text"
             onPress={() => {
@@ -361,7 +372,10 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
           <View style={{ width: 60 }} />
         </View>
 
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: 50 + insets.bottom }]}
+          showsVerticalScrollIndicator={false}
+        >
           {/* Task Overview Surface */}
           <View style={[styles.bannerSurface, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
             <View style={[styles.bannerIconBubble, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)' }]}>

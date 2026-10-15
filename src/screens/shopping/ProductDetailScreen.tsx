@@ -15,6 +15,7 @@ import {
   Avatar,
   Chip,
 } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../hooks/useAuth';
 import { useGroup } from '../../hooks/useGroup';
 import { useShopping } from '../../hooks/useShopping';
@@ -71,6 +72,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
   route,
   navigation,
 }) => {
+  const insets = useSafeAreaInsets();
   const { isDark } = useThemeStore();
   const tokens = getLiquidGlassTokens(isDark);
   const { t } = useLanguageStore();
@@ -222,7 +224,16 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
     <View style={[styles.container, { backgroundColor: tokens.bg }]}>
       <View style={styles.contentWrapper}>
         {/* Header */}
-        <View style={[styles.topBar, { backgroundColor: tokens.surface, borderBottomColor: tokens.border }]}>
+        <View
+          style={[
+            styles.topBar,
+            {
+              backgroundColor: tokens.surface,
+              borderBottomColor: tokens.border,
+              paddingTop: Math.max(insets.top, 12),
+            },
+          ]}
+        >
           <Button
             mode="text"
             onPress={() => {
@@ -240,7 +251,10 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
           <View style={{ width: 60 }} />
         </View>
 
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: 50 + insets.bottom }]}
+          showsVerticalScrollIndicator={false}
+        >
           {/* Product Banner */}
           <View style={[styles.bannerSurface, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
             <View style={[styles.bannerIconBubble, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)' }]}>

@@ -14,6 +14,7 @@ import {
   Snackbar,
   ActivityIndicator,
 } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../hooks/useAuth';
 import { useGroup } from '../../hooks/useGroup';
 import { useCleaning } from '../../hooks/useCleaning';
@@ -78,6 +79,7 @@ interface CleaningListScreenProps {
  * assignment rotation order, and completion action triggers.
  */
 export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const { isDark } = useThemeStore();
   const tokens = getLiquidGlassTokens(isDark);
   const { t } = useLanguageStore();
@@ -296,7 +298,7 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
           data={tasks}
           keyExtractor={(item) => item.id}
           renderItem={renderCleaningItem}
-          contentContainerStyle={styles.listContainer}
+          contentContainerStyle={[styles.listContainer, { paddingBottom: 160 + insets.bottom }]}
           ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -345,7 +347,7 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
         <FAB
           icon="plus"
           label={t('newChore') || 'Nouvelle tâche'}
-          style={[styles.fab, { backgroundColor: '#0284C7' }]}
+          style={[styles.fab, { backgroundColor: '#0284C7', bottom: 92 + insets.bottom }]}
           color="#FFFFFF"
           onPress={() => {
             soundService.playPopSound();

@@ -15,6 +15,7 @@ import {
   Snackbar,
   ActivityIndicator,
 } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../hooks/useAuth';
 import { useGroup } from '../../hooks/useGroup';
 import { useShopping } from '../../hooks/useShopping';
@@ -61,6 +62,7 @@ interface DashboardScreenProps {
 }
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const { isDark } = useThemeStore();
   const tokens = getLiquidGlassTokens(isDark);
   const { t } = useLanguageStore();
@@ -169,7 +171,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
   return (
     <View style={[styles.container, { backgroundColor: tokens.bg }]}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 150 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -179,7 +181,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
           />
         }
       >
-        <View style={styles.contentWrapper}>
+        <View style={[styles.contentWrapper, { paddingTop: Math.max(insets.top, 14) }]}>
           {/* Header Card with Notification Bell */}
           <View
             style={[
@@ -306,47 +308,65 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
                 </Text>
               </View>
               <View style={styles.adminHubButtons}>
-                <Button
-                  mode="contained"
-                  buttonColor={tokens.primary}
-                  textColor="#FFFFFF"
-                  compact
-                  style={styles.hubBtn}
-                  labelStyle={styles.hubBtnLabel}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  style={[
+                    styles.hubActionCard,
+                    {
+                      backgroundColor: isDark ? 'rgba(10, 132, 255, 0.16)' : '#EFF6FF',
+                      borderColor: isDark ? 'rgba(10, 132, 255, 0.35)' : '#BFDBFE',
+                    },
+                  ]}
                   onPress={() => {
                     soundService.playPopSound();
                     navigation.navigate('Shopping', { screen: 'AddProduct' });
                   }}
                 >
-                  {t('newProduct')}
-                </Button>
-                <Button
-                  mode="contained"
-                  buttonColor={tokens.secondary}
-                  textColor="#FFFFFF"
-                  compact
-                  style={styles.hubBtn}
-                  labelStyle={styles.hubBtnLabel}
+                  <Text style={styles.hubActionIcon}>🛒</Text>
+                  <Text style={[styles.hubActionLabel, { color: tokens.primary }]}>
+                    + {t('newProduct')}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  style={[
+                    styles.hubActionCard,
+                    {
+                      backgroundColor: isDark ? 'rgba(175, 82, 222, 0.16)' : '#FAF5FF',
+                      borderColor: isDark ? 'rgba(175, 82, 222, 0.35)' : '#E9D5FF',
+                    },
+                  ]}
                   onPress={() => {
                     soundService.playPopSound();
                     navigation.navigate('Cleaning', { screen: 'AddCleaningTask' });
                   }}
                 >
-                  {t('newChore')}
-                </Button>
-                <Button
-                  mode="outlined"
-                  compact
-                  textColor={tokens.primary}
-                  style={[styles.hubBtn, { borderColor: tokens.border }]}
-                  labelStyle={styles.hubBtnLabel}
+                  <Text style={styles.hubActionIcon}>🧹</Text>
+                  <Text style={[styles.hubActionLabel, { color: tokens.secondary }]}>
+                    + {t('newChore')}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  style={[
+                    styles.hubActionCard,
+                    {
+                      backgroundColor: isDark ? 'rgba(255, 214, 10, 0.14)' : '#FEFCE8',
+                      borderColor: isDark ? 'rgba(255, 214, 10, 0.3)' : '#FEF08A',
+                    },
+                  ]}
                   onPress={() => {
                     soundService.playPopSound();
                     navigation.navigate('Profile', { screen: 'ManageMembers' });
                   }}
                 >
-                  {t('membersBtn')}
-                </Button>
+                  <Text style={styles.hubActionIcon}>👥</Text>
+                  <Text style={[styles.hubActionLabel, { color: isDark ? '#FDE68A' : '#B45309' }]}>
+                    {t('membersBtn')}
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -574,11 +594,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   headerSurface: {
-    paddingTop: 20,
+    paddingTop: 18,
     paddingBottom: 14,
     paddingHorizontal: 16,
     borderRadius: 26,
-    marginTop: 14,
+    marginTop: 8,
     borderWidth: 1.2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -640,14 +660,23 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     marginTop: 10,
   },
-  hubBtn: {
+  hubActionCard: {
     flex: 1,
-    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    borderRadius: 14,
+    borderWidth: 1.2,
   },
-  hubBtnLabel: {
-    fontSize: 11,
+  hubActionIcon: {
+    fontSize: 14,
+    marginRight: 4,
+  },
+  hubActionLabel: {
+    fontSize: 11.5,
     fontWeight: '800',
-    marginHorizontal: 0,
   },
   summaryContainer: {
     flexDirection: 'row',

@@ -18,6 +18,7 @@ import {
   Divider,
   SegmentedButtons,
 } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import { useAuth } from '../../hooks/useAuth';
 import { useGroup } from '../../hooks/useGroup';
@@ -41,6 +42,7 @@ interface ProfileScreenProps {
  * modular notification preferences, and admin space.
  */
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const { isDark, themePreference, setThemePreference } = useThemeStore();
   const tokens = getLiquidGlassTokens(isDark);
   const { t, erasmusMode, setErasmusMode } = useLanguageStore();
@@ -231,10 +233,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   return (
     <View style={[styles.container, { backgroundColor: tokens.bg }]}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 150 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.contentWrapper}>
+        <View style={[styles.contentWrapper, { paddingTop: Math.max(insets.top, 14) }]}>
           {/* User Profile Glass Card */}
           <View
             style={[
