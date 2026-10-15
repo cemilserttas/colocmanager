@@ -26,6 +26,7 @@ import { useLanguageStore } from '../../store/useLanguageStore';
 import { useNotificationPreferences } from '../../store/useNotificationPreferences';
 import { notificationService } from '../../services/notificationService';
 import { soundService } from '../../services/soundService';
+import { adminService } from '../../services/adminService';
 
 interface ProfileScreenProps {
   navigation: {
@@ -79,6 +80,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     Boolean(user?.uid) &&
     (group?.adminUid === user?.uid ||
       members.some((m) => (m.userId === user?.uid || m.id === user?.uid) && m.role === 'admin'));
+
+  const isSuperAdmin = adminService.isSuperAdmin(user);
 
   const adminMember = members.find(
     (m) => m.userId === group?.adminUid || m.id === group?.adminUid || m.role === 'admin'
@@ -284,6 +287,52 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
               </View>
             )}
           </View>
+
+          {/* Super-Administrator Portal Card (Application-wide control) */}
+          {isSuperAdmin && (
+            <View
+              style={[
+                styles.adminControlCard,
+                {
+                  backgroundColor: isDark ? 'rgba(255, 214, 10, 0.15)' : 'rgba(255, 214, 10, 0.18)',
+                  borderColor: tokens.adminGold,
+                  borderWidth: 2,
+                },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ fontSize: 28, marginRight: 10 }}>👑</Text>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text variant="titleMedium" style={{ fontWeight: '900', color: isDark ? '#FDE68A' : '#78350F' }}>
+                      Portail Super-Administrateur
+                    </Text>
+                    <View style={styles.superAdminPill}>
+                      <Text style={styles.superAdminPillText}>GLOBAL</Text>
+                    </View>
+                  </View>
+                  <Text variant="bodySmall" style={{ color: isDark ? '#FEF3C7' : '#92400E', marginTop: 2, lineHeight: 18 }}>
+                    Gérez l'ensemble des utilisateurs, restrictions d'accès, colocations, création directe de comptes et statistiques globales.
+                  </Text>
+                </View>
+              </View>
+
+              <Button
+                mode="contained"
+                buttonColor="#B45309"
+                textColor="#FFFFFF"
+                icon="shield-crown"
+                style={{ marginTop: 14, borderRadius: 16 }}
+                labelStyle={{ fontWeight: '900' }}
+                onPress={() => {
+                  soundService.playPopSound();
+                  navigation.navigate('AdminPortal');
+                }}
+              >
+                Ouvrir le Panneau Super-Admin →
+              </Button>
+            </View>
+          )}
 
           {/* Admin Space Card */}
           {isAdmin && (
@@ -698,6 +747,19 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 24,
     borderWidth: 1.5,
+  },
+  superAdminPill: {
+    marginLeft: 8,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  superAdminPillText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#B45309',
+    letterSpacing: 0.5,
   },
   sectionCard: {
     marginTop: 16,

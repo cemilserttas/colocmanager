@@ -15,6 +15,8 @@ import { theme } from '../constants/theme';
 import AuthStack from './AuthStack';
 import MainTabs from './MainTabs';
 import JoinCreateGroupScreen from '../screens/group/JoinCreateGroupScreen';
+import SuspendedAccountScreen from '../screens/admin/SuspendedAccountScreen';
+import AdminPortalScreen from '../screens/admin/AdminPortalScreen';
 
 import { useThemeStore, getLiquidGlassTokens } from '../store/useThemeStore';
 
@@ -50,6 +52,11 @@ const AppNavigator: React.FC = () => {
     );
   }
 
+  // Block suspended accounts immediately with dedicated restriction screen
+  if (user?.status === 'suspended') {
+    return <SuspendedAccountScreen />;
+  }
+
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!isAuthenticated ? (
@@ -57,14 +64,20 @@ const AppNavigator: React.FC = () => {
         <Stack.Screen name="Auth" component={AuthStack} />
       ) : !group ? (
         // Authenticated but no group → show join/create
-        <Stack.Screen
-          name="JoinCreateGroup"
-          component={JoinCreateGroupScreen}
-          options={{ headerShown: false }}
-        />
+        <>
+          <Stack.Screen
+            name="JoinCreateGroup"
+            component={JoinCreateGroupScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen name="AdminPortal" component={AdminPortalScreen} />
+        </>
       ) : (
         // Authenticated + has group → show main app
-        <Stack.Screen name="Main" component={MainTabs} />
+        <>
+          <Stack.Screen name="Main" component={MainTabs} />
+          <Stack.Screen name="AdminPortal" component={AdminPortalScreen} />
+        </>
       )}
     </Stack.Navigator>
   );

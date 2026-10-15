@@ -23,7 +23,8 @@ import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
 import { useLanguageStore } from '../../store/useLanguageStore';
 import { soundService } from '../../services/soundService';
 import { NotificationBell } from '../../components/common/NotificationBell';
-import { GroupMember } from '../../types';
+import { GroupMember, SystemBroadcast } from '../../types';
+import { adminService } from '../../services/adminService';
 
 const getMemberName = (uid: string, members: GroupMember[]): string => {
   const member = members.find((m) => m.userId === uid || m.id === uid);
@@ -94,12 +95,21 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
   );
   const adminName = adminMember?.displayName || adminMember?.email || 'Admin';
 
+  const [broadcasts, setBroadcasts] = useState<SystemBroadcast[]>([]);
+
+  React.useEffect(() => {
+    adminService.getBroadcasts().then((b) => {
+      setBroadcasts(b.filter((item) => item.active));
+    }).catch(() => {});
+  }, []);
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
       await Promise.allSettled([
         fetchProducts ? fetchProducts() : Promise.resolve(),
         fetchTasks ? fetchTasks() : Promise.resolve(),
+        adminService.getBroadcasts().then((b) => setBroadcasts(b.filter((item) => item.active))).catch(() => {}),
       ]);
     } finally {
       setRefreshing(false);
@@ -210,6 +220,48 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* System Broadcast Announcements */}
+            {broadcasts.map((b) => {
+              const borderColors = {
+                info: tokens.primary,
+                warning: '#F59E0B',
+                urgent: tokens.error,
+              };
+              const bgColors = {
+                info: isDark ? 'rgba(10, 132, 255, 0.15)' : 'rgba(10, 132, 255, 0.1)',
+                warning: isDark ? 'rgba(245, 158, 11, 0.15)' : 'rgba(245, 158, 11, 0.1)',
+                urgent: isDark ? 'rgba(255, 69, 58, 0.15)' : 'rgba(255, 69, 58, 0.1)',
+              };
+              const icons = {
+                info: '📢',
+                warning: '⚠️',
+                urgent: '🚨',
+              };
+
+              return (
+                <View
+                  key={b.id}
+                  style={[
+                    styles.broadcastBanner,
+                    {
+                      backgroundColor: bgColors[b.level] || bgColors.info,
+                      borderColor: borderColors[b.level] || borderColors.info,
+                    },
+                  ]}
+                >
+                  <Text style={{ fontSize: 18, marginRight: 8 }}>{icons[b.level] || '📢'}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text variant="labelMedium" style={{ fontWeight: '900', color: tokens.text }}>
+                      {b.title}
+                    </Text>
+                    <Text variant="bodySmall" style={{ color: tokens.textSecondary, marginTop: 2 }}>
+                      {b.message}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
 
             {/* Admin or Member Role Banner */}
             <View style={styles.roleBannerRow}>
@@ -579,6 +631,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     marginTop: 4,
+  },
+  broadcastBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    marginTop: 10,
   },
   hubBtn: {
     flex: 1,

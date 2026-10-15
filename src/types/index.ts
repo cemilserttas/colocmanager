@@ -3,3 +3,4 @@ export * from './group';
 export * from './product';
 export * from './cleaning';
 export * from './notification';
+export * from './admin';

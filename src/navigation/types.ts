@@ -39,6 +39,7 @@ export type CleaningStackParamList = {
 export type ProfileStackParamList = {
   ProfileMain: undefined;
   ManageMembers: undefined;
+  AdminPortal: undefined;
 };
 
 // Root Stack (wraps everything)
@@ -46,6 +47,7 @@ export type RootStackParamList = {
   Auth: NavigatorScreenParams<AuthStackParamList>;
   JoinCreateGroup: undefined;
   Main: NavigatorScreenParams<MainTabParamList>;
+  AdminPortal: undefined;
 };
 
 // Screen props types

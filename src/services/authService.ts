@@ -74,6 +74,10 @@ function mapFirebaseUser(
     fcmToken: firestoreData?.fcmToken ?? null,
     createdAt: firestoreData?.createdAt || firebaseUser.metadata.creationTime || new Date().toISOString(),
     updatedAt: firestoreData?.updatedAt,
+    isSuperAdmin: firestoreData?.isSuperAdmin ?? false,
+    status: firestoreData?.status ?? 'active',
+    suspendedReason: firestoreData?.suspendedReason ?? null,
+    suspendedAt: firestoreData?.suspendedAt ?? null,
   };
 }
 

@@ -24,6 +24,7 @@ import CleaningDetailScreen from '../screens/cleaning/CleaningDetailScreen';
 import AddCleaningTaskScreen from '../screens/cleaning/AddCleaningTaskScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import ManageMembersScreen from '../screens/group/ManageMembersScreen';
+import AdminPortalScreen from '../screens/admin/AdminPortalScreen';
 
 // Shopping Stack
 const ShoppingStack = createNativeStackNavigator<ShoppingStackParamList>();
@@ -123,6 +124,11 @@ const ProfileNavigator: React.FC = () => {
         name="ManageMembers"
         component={ManageMembersScreen}
         options={{ headerTitle: t('membersTitle') }}
+      />
+      <ProfileStack.Screen
+        name="AdminPortal"
+        component={AdminPortalScreen}
+        options={{ headerShown: false }}
       />
     </ProfileStack.Navigator>
   );
