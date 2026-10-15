@@ -18,6 +18,43 @@ import { User } from '../types';
 import { isDemoMode, mockStorage } from './mockStorage';
 
 /**
+ * Helper to race any promise against a timeout
+ */
+export function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
+/**
+ * Translates Firebase Auth error codes into friendly French messages.
+ */
+export function formatAuthError(error: any): string {
+  const code = error?.code || '';
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return 'Adresse e-mail ou mot de passe incorrect.';
+    case 'auth/email-already-in-use':
+      return 'Cette adresse e-mail est déjà associée à un compte.';
+    case 'auth/weak-password':
+      return 'Le mot de passe doit comporter au moins 6 caractères.';
+    case 'auth/invalid-email':
+      return "L'adresse e-mail n'est pas valide.";
+    case 'auth/network-request-failed':
+      return 'Erreur de connexion. Vérifiez votre accès internet.';
+    case 'auth/too-many-requests':
+      return 'Trop de tentatives échouées. Veuillez réessayer dans quelques instants.';
+    case 'auth/user-disabled':
+      return 'Ce compte a été suspendu.';
+    default:
+      return error?.message || 'Une erreur est survenue lors de la connexion.';
+  }
+}
+
+/**
  * Maps a Firebase auth user and optional Firestore data into the application User interface.
  */
 function mapFirebaseUser(
@@ -49,11 +86,10 @@ const notifyDemoSubscribers = (user: User | null) => {
 
 /**
  * Authentication service handling Firebase Auth and Firestore user profile operations.
- * Seamlessly falls back to mock/localStorage in demo mode.
  */
 export const authService = {
   /**
-   * Quick demo login with pre-populated roommates and tasks
+   * Quick demo login with pre-populated roommates and tasks (for demo mode)
    */
   async signInDemo(): Promise<User> {
     const user = await mockStorage.initDemoData();
@@ -79,7 +115,7 @@ export const authService = {
 
     try {
       const trimmedEmail = email.trim().toLowerCase();
-      const trimmedName = displayName.trim();
+      const trimmedName = displayName.trim() || 'Colocataire';
 
       const userCredential = await createUserWithEmailAndPassword(
         auth,
@@ -88,7 +124,7 @@ export const authService = {
       );
       const fbUser = userCredential.user;
 
-      await updateProfile(fbUser, { displayName: trimmedName });
+      await updateProfile(fbUser, { displayName: trimmedName }).catch(() => {});
 
       const now = new Date().toISOString();
       const newUser: User = {
@@ -104,12 +140,15 @@ export const authService = {
       };
 
       const userDocRef = doc(db, 'users', fbUser.uid);
-      await setDoc(userDocRef, newUser);
+      // Attempt firestore save with 2.5s timeout so UI never hangs
+      await withTimeout(setDoc(userDocRef, newUser), 2500, null).catch((err) => {
+        console.warn('Non-blocking user doc creation warning:', err);
+      });
 
       return newUser;
     } catch (error: any) {
-      console.warn('Firebase error, falling back to demo mode:', error.message);
-      return this.signUp(email, password, displayName);
+      console.error('Firebase signUp error:', error);
+      throw new Error(formatAuthError(error));
     }
   },
 
@@ -124,23 +163,25 @@ export const authService = {
     }
 
     try {
+      const trimmedEmail = email.trim().toLowerCase();
       const userCredential = await signInWithEmailAndPassword(
         auth,
-        email.trim().toLowerCase(),
+        trimmedEmail,
         password
       );
       const fbUser = userCredential.user;
 
+      // Fast Firestore user doc lookup with 2000ms timeout
       const userDocRef = doc(db, 'users', fbUser.uid);
-      const userDocSnap = await getDoc(userDocRef);
+      const userDocSnap = await withTimeout(getDoc(userDocRef), 2000, null).catch(() => null);
 
-      if (userDocSnap.exists()) {
+      if (userDocSnap && userDocSnap.exists()) {
         return userDocSnap.data() as User;
       }
       return mapFirebaseUser(fbUser);
     } catch (error: any) {
-      console.warn('Firebase signIn failed, falling back to demo mode:', error.message);
-      return this.signInDemo();
+      console.error('Firebase signIn error:', error);
+      throw new Error(formatAuthError(error));
     }
   },
 
@@ -174,7 +215,7 @@ export const authService = {
       await sendPasswordResetEmail(auth, email.trim().toLowerCase());
     } catch (error: any) {
       console.error('Error during resetPassword in authService:', error);
-      throw error;
+      throw new Error(formatAuthError(error));
     }
   },
 
@@ -196,7 +237,9 @@ export const authService = {
         updatedAt: new Date().toISOString(),
       };
 
-      await updateDoc(userDocRef, updatePayload);
+      await withTimeout(updateDoc(userDocRef, updatePayload), 2500, null).catch((err) => {
+        console.warn('Non-blocking user doc update warning:', err);
+      });
 
       if (auth.currentUser && auth.currentUser.uid === uid) {
         const authUpdates: { displayName?: string; photoURL?: string | null } = {};
@@ -204,7 +247,7 @@ export const authService = {
         if (data.photoURL !== undefined) authUpdates.photoURL = data.photoURL;
 
         if (Object.keys(authUpdates).length > 0) {
-          await updateProfile(auth.currentUser, authUpdates);
+          await updateProfile(auth.currentUser, authUpdates).catch(() => {});
         }
       }
     } catch (error: any) {
@@ -217,10 +260,14 @@ export const authService = {
     if (isDemoMode()) return;
     try {
       const userDocRef = doc(db, 'users', uid);
-      await updateDoc(userDocRef, {
-        fcmToken: token,
-        updatedAt: new Date().toISOString(),
-      });
+      await withTimeout(
+        updateDoc(userDocRef, {
+          fcmToken: token,
+          updatedAt: new Date().toISOString(),
+        }),
+        2500,
+        null
+      ).catch(() => {});
     } catch (error: any) {
       console.error(`Error updating FCM token for user ${uid}:`, error);
     }
@@ -235,6 +282,11 @@ export const authService = {
     return mapFirebaseUser(fbUser);
   },
 
+  /**
+   * Listens for Firebase auth state changes.
+   * Dispatches the base user IMMEDIATELY (0ms) so UI is responsive,
+   * then enriches in background with Firestore doc if available.
+   */
   onAuthStateChanged(callback: (user: User | null) => void): () => void {
     if (isDemoMode()) {
       demoAuthSubscribers.add(callback);
@@ -246,25 +298,31 @@ export const authService = {
       };
     }
 
-    return firebaseOnAuthStateChanged(auth, async (fbUser) => {
+    return firebaseOnAuthStateChanged(auth, (fbUser) => {
       if (!fbUser) {
         callback(null);
         return;
       }
 
-      try {
-        const userDocRef = doc(db, 'users', fbUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
+      // 1. Immediately emit mapped Firebase user (instant 0ms loading resolution)
+      const baseUser = mapFirebaseUser(fbUser);
+      callback(baseUser);
 
-        if (userDocSnap.exists()) {
-          callback(userDocSnap.data() as User);
-        } else {
-          callback(mapFirebaseUser(fbUser));
-        }
-      } catch (error) {
-        console.error('Error fetching user document in onAuthStateChanged:', error);
-        callback(mapFirebaseUser(fbUser));
-      }
+      // 2. Background enrich from Firestore user doc with timeout
+      const userDocRef = doc(db, 'users', fbUser.uid);
+      withTimeout(getDoc(userDocRef), 2000, null)
+        .then((userDocSnap) => {
+          if (userDocSnap && userDocSnap.exists()) {
+            const enriched = userDocSnap.data() as User;
+            callback({
+              ...baseUser,
+              ...enriched,
+              id: fbUser.uid,
+              uid: fbUser.uid,
+            });
+          }
+        })
+        .catch(() => {});
     });
   },
 };

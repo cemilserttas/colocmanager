@@ -26,8 +26,20 @@ const AppNavigator: React.FC = () => {
   const { isDark } = useThemeStore();
   const tokens = getLiquidGlassTokens(isDark);
 
-  // Show loading screen while checking auth and group status
-  if (authLoading || (isAuthenticated && groupLoading)) {
+  // Safety timeout: Never keep the user waiting on a spinner for more than 2 seconds
+  const [safetyUnlocked, setSafetyUnlocked] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSafetyUnlocked(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [isAuthenticated]);
+
+  // Show loading screen while checking auth and group status (capped at 2s max)
+  const isStillLoading = !safetyUnlocked && (authLoading || (isAuthenticated && groupLoading));
+
+  if (isStillLoading) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: tokens.bg }]}>
         <Text style={styles.logo}>🏠</Text>

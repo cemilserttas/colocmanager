@@ -1,6 +1,5 @@
 import {
   collection,
-  collectionGroup,
   doc,
   getDoc,
   getDocs,
@@ -15,8 +14,18 @@ import {
   increment,
 } from 'firebase/firestore';
 import { db } from '../../firebase.config';
-import { Group, GroupMember, User } from '../types';
+import { Group, GroupMember } from '../types';
 import { isDemoMode, mockStorage } from './mockStorage';
+
+/**
+ * Helper to race any promise against a timeout
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
 
 /**
  * Generates an invite code formatted as 'XXX-XXXX' (3 uppercase letters, dash, 4 digits).
@@ -63,7 +72,7 @@ export const groupService = {
 
     try {
       const now = new Date().toISOString();
-      let inviteCode = generateInviteCode();
+      const inviteCode = generateInviteCode();
       const groupDocRef = doc(collection(db, 'groups'));
       const groupId = groupDocRef.id;
 
@@ -92,14 +101,18 @@ export const groupService = {
         email: '',
         photoURL: null,
       };
-
       batch.set(memberDocRef, adminMember);
-      await batch.commit();
+
+      // Keep user doc synchronized with current groupId
+      const userDocRef = doc(db, 'users', adminUid);
+      batch.set(userDocRef, { groupId, updatedAt: now }, { merge: true });
+
+      await withTimeout(batch.commit(), 3500, null);
 
       return newGroup;
     } catch (error: any) {
-      console.warn('Firebase error in createGroup, falling back to demo:', error.message);
-      return this.createGroup(name, adminUid);
+      console.error('Firebase error in createGroup:', error);
+      throw new Error(error?.message || 'Erreur lors de la création de la colocation.');
     }
   },
 
@@ -119,12 +132,50 @@ export const groupService = {
     try {
       const sanitizedCode = inviteCode.trim().toUpperCase();
       const group = await groupService.getGroupByInviteCode(sanitizedCode);
-      if (!group) throw new Error("Code d'invitation invalide");
-      return group;
+      if (!group) {
+        throw new Error("Code d'invitation invalide ou introuvable.");
+      }
+
+      const groupId = group.id || (group as any).groupId;
+      const now = new Date().toISOString();
+
+      const batch = writeBatch(db);
+
+      // Add member record
+      const memberDocRef = doc(db, 'groups', groupId, 'members', userId);
+      const newMember: GroupMember = {
+        id: userId,
+        userId,
+        groupId,
+        role: 'member',
+        orderIndex: (group.memberCount || 1),
+        joinedAt: now,
+        displayName: 'Colocataire',
+        email: '',
+        photoURL: null,
+      };
+      batch.set(memberDocRef, newMember, { merge: true });
+
+      // Increment memberCount on group
+      const groupDocRef = doc(db, 'groups', groupId);
+      batch.update(groupDocRef, {
+        memberCount: increment(1),
+        updatedAt: now,
+      });
+
+      // Update user doc with groupId
+      const userDocRef = doc(db, 'users', userId);
+      batch.set(userDocRef, { groupId, updatedAt: now }, { merge: true });
+
+      await withTimeout(batch.commit(), 3500, null);
+
+      return {
+        ...group,
+        memberCount: (group.memberCount || 1) + 1,
+      };
     } catch (error: any) {
-      console.warn('Firebase error in joinGroup:', error.message);
-      const group = await mockStorage.getGroup();
-      return group!;
+      console.error('Firebase error in joinGroup:', error);
+      throw new Error(error?.message || "Impossible de rejoindre la colocation avec ce code.");
     }
   },
 
@@ -133,10 +184,15 @@ export const groupService = {
       return await mockStorage.getGroup();
     }
     try {
-      const groupDocSnap = await getDoc(doc(db, 'groups', groupId));
-      return groupDocSnap.exists() ? (groupDocSnap.data() as Group) : null;
+      const groupDocSnap = await withTimeout(
+        getDoc(doc(db, 'groups', groupId)),
+        2500,
+        null
+      );
+      if (!groupDocSnap || !groupDocSnap.exists()) return null;
+      return { id: groupDocSnap.id, ...groupDocSnap.data() } as Group;
     } catch {
-      return await mockStorage.getGroup();
+      return null;
     }
   },
 
@@ -151,10 +207,13 @@ export const groupService = {
         where('inviteCode', '==', sanitizedCode),
         limit(1)
       );
-      const querySnap = await getDocs(q);
-      return querySnap.empty ? null : (querySnap.docs[0].data() as Group);
-    } catch {
-      return await mockStorage.getGroup();
+      const querySnap = await withTimeout(getDocs(q), 3000, null);
+      if (!querySnap || querySnap.empty) return null;
+      const docSnap = querySnap.docs[0];
+      return { id: docSnap.id, ...docSnap.data() } as Group;
+    } catch (err) {
+      console.warn('Error fetching group by invite code:', err);
+      return null;
     }
   },
 
@@ -164,13 +223,22 @@ export const groupService = {
     }
     try {
       const membersRef = collection(db, 'groups', groupId, 'members');
-      const querySnap = await getDocs(membersRef);
-      return querySnap.docs.map((docSnap) => docSnap.data() as GroupMember);
+      const querySnap = await withTimeout(getDocs(membersRef), 2500, null);
+      if (!querySnap) return [];
+      return querySnap.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      } as GroupMember));
     } catch {
-      return await mockStorage.getMembers();
+      return [];
     }
   },
 
+  /**
+   * Finds the user's active flatshare.
+   * Uses direct document lookup on users/{userId} and fallback to groups where adminUid == userId.
+   * Completely avoids collectionGroup to guarantee instantaneous response without hanging.
+   */
   async getUserGroup(
     userId: string
   ): Promise<{ group: Group; member: GroupMember } | null> {
@@ -181,21 +249,68 @@ export const groupService = {
       const member = members.find((m) => m.userId === userId || m.id === userId);
       return member ? { group, member } : null;
     }
+
     try {
-      const membersQuery = query(
-        collectionGroup(db, 'members'),
-        where('userId', '==', userId),
+      // 1. Direct lookup on user doc
+      const userDocSnap = await withTimeout(
+        getDoc(doc(db, 'users', userId)),
+        2000,
+        null
+      );
+
+      if (userDocSnap && userDocSnap.exists()) {
+        const userData = userDocSnap.data();
+        if (userData?.groupId) {
+          const group = await groupService.getGroup(userData.groupId);
+          if (group) {
+            const memberDocSnap = await withTimeout(
+              getDoc(doc(db, 'groups', group.id, 'members', userId)),
+              1500,
+              null
+            );
+            const member: GroupMember = memberDocSnap && memberDocSnap.exists()
+              ? (memberDocSnap.data() as GroupMember)
+              : {
+                  id: userId,
+                  userId,
+                  groupId: group.id,
+                  role: group.adminUid === userId ? 'admin' : 'member',
+                  orderIndex: 0,
+                  joinedAt: group.createdAt,
+                };
+            return { group, member };
+          }
+        }
+      }
+
+      // 2. Fallback check: is user an admin of any group?
+      const adminQuery = query(
+        collection(db, 'groups'),
+        where('adminUid', '==', userId),
         limit(1)
       );
-      const querySnap = await getDocs(membersQuery);
-      if (querySnap.empty) {
-        return null;
+      const adminSnap = await withTimeout(getDocs(adminQuery), 2000, null);
+      if (adminSnap && !adminSnap.empty) {
+        const groupDoc = adminSnap.docs[0];
+        const group = { id: groupDoc.id, ...groupDoc.data() } as Group;
+
+        // Auto sync user document with this groupId for fast future lookups
+        setDoc(doc(db, 'users', userId), { groupId: group.id }, { merge: true }).catch(() => {});
+
+        const member: GroupMember = {
+          id: userId,
+          userId,
+          groupId: group.id,
+          role: 'admin',
+          orderIndex: 0,
+          joinedAt: group.createdAt,
+        };
+        return { group, member };
       }
-      const member = querySnap.docs[0].data() as GroupMember;
-      const group = await groupService.getGroup(member.groupId);
-      return group ? { group, member } : null;
+
+      return null;
     } catch (err) {
-      console.warn('Error fetching user group in Firestore:', err);
+      console.warn('Error in getUserGroup:', err);
       return null;
     }
   },
@@ -209,7 +324,10 @@ export const groupService = {
       return;
     }
     try {
-      await deleteDoc(doc(db, 'groups', groupId, 'members', userId));
+      const batch = writeBatch(db);
+      batch.delete(doc(db, 'groups', groupId, 'members', userId));
+      batch.update(doc(db, 'users', userId), { groupId: null });
+      await withTimeout(batch.commit(), 2500, null);
     } catch (error: any) {
       console.warn('Firebase error in removeMember:', error);
     }
@@ -240,18 +358,24 @@ export const groupService = {
     try {
       const batch = writeBatch(db);
       const groupRef = doc(db, 'groups', groupId);
-      batch.update(groupRef, { adminUid: newAdminUid });
+      batch.update(groupRef, { adminUid: newAdminUid, updatedAt: new Date().toISOString() });
 
-      const membersSnap = await getDocs(collection(db, 'groups', groupId, 'members'));
-      membersSnap.docs.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (data.userId === newAdminUid || docSnap.id === newAdminUid) {
-          batch.update(docSnap.ref, { role: 'admin' });
-        } else if (data.role === 'admin') {
-          batch.update(docSnap.ref, { role: 'member' });
-        }
-      });
-      await batch.commit();
+      const membersSnap = await withTimeout(
+        getDocs(collection(db, 'groups', groupId, 'members')),
+        2500,
+        null
+      );
+      if (membersSnap) {
+        membersSnap.docs.forEach((docSnap) => {
+          const data = docSnap.data();
+          if (data.userId === newAdminUid || docSnap.id === newAdminUid) {
+            batch.update(docSnap.ref, { role: 'admin' });
+          } else if (data.role === 'admin') {
+            batch.update(docSnap.ref, { role: 'member' });
+          }
+        });
+      }
+      await withTimeout(batch.commit(), 3000, null);
     } catch (error: any) {
       console.warn('Firebase error in transferAdmin:', error);
     }
@@ -269,7 +393,14 @@ export const groupService = {
       return newCode;
     }
     try {
-      await updateDoc(doc(db, 'groups', groupId), { inviteCode: newCode });
+      await withTimeout(
+        updateDoc(doc(db, 'groups', groupId), {
+          inviteCode: newCode,
+          updatedAt: new Date().toISOString(),
+        }),
+        2500,
+        null
+      );
       return newCode;
     } catch {
       return newCode;
@@ -282,7 +413,7 @@ export const groupService = {
       return;
     }
     try {
-      await deleteDoc(doc(db, 'groups', groupId));
+      await withTimeout(deleteDoc(doc(db, 'groups', groupId)), 2500, null);
     } catch (error: any) {
       console.warn('Firebase error in deleteGroup:', error);
     }
@@ -298,11 +429,17 @@ export const groupService = {
         groupSubscribers.delete(callback);
       };
     }
-    return onSnapshot(doc(db, 'groups', groupId), (docSnap) => {
-      if (docSnap.exists()) {
-        callback(docSnap.data() as Group);
+    return onSnapshot(
+      doc(db, 'groups', groupId),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          callback({ id: docSnap.id, ...docSnap.data() } as Group);
+        }
+      },
+      (err) => {
+        console.warn('subscribeToGroup error:', err);
       }
-    });
+    );
   },
 
   subscribeToMembers(groupId: string, callback: (members: GroupMember[]) => void): () => void {
@@ -313,9 +450,15 @@ export const groupService = {
         memberSubscribers.delete(callback);
       };
     }
-    return onSnapshot(collection(db, 'groups', groupId, 'members'), (snapshot) => {
-      callback(snapshot.docs.map((docSnap) => docSnap.data() as GroupMember));
-    });
+    return onSnapshot(
+      collection(db, 'groups', groupId, 'members'),
+      (snapshot) => {
+        callback(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as GroupMember)));
+      },
+      (err) => {
+        console.warn('subscribeToMembers error:', err);
+      }
+    );
   },
 };
 

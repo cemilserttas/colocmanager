@@ -31,7 +31,11 @@ export function useGroup() {
 
   // On mount or user change, load user's group if not yet loaded
   useEffect(() => {
-    if (user?.uid && !group && loadedUserRef.current !== user.uid) {
+    if (!user?.uid) {
+      loadedUserRef.current = null;
+      return;
+    }
+    if (!group && loadedUserRef.current !== user.uid) {
       loadedUserRef.current = user.uid;
       loadUserGroup(user.uid).catch(() => {
         // Errors are captured inside the store state

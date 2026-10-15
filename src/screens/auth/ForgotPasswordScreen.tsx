@@ -12,10 +12,10 @@ import {
   TextInput,
   Snackbar,
   IconButton,
-  Surface,
 } from 'react-native-paper';
 import { useAuth } from '../../hooks/useAuth';
-import { colors, spacing, borderRadius } from '../../constants/theme';
+import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
+import { soundService } from '../../services/soundService';
 
 interface ForgotPasswordScreenProps {
   navigation: {
@@ -25,20 +25,20 @@ interface ForgotPasswordScreenProps {
 }
 
 /**
- * Screen enabling users to request a password reset email.
+ * Apple Liquid Glass Forgot Password Screen
  */
 export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navigation }) => {
-  const { resetPassword, loading, error: authError } = useAuth();
+  const { isDark } = useThemeStore();
+  const tokens = getLiquidGlassTokens(isDark);
+  const { resetPassword, loading, error: authError, clearError } = useAuth();
 
   const [email, setEmail] = useState('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
 
-  /**
-   * Dispatches the reset password request for the given email.
-   */
   const handleResetPassword = async () => {
+    soundService.playPopSound();
     const trimmedEmail = email.trim();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -50,6 +50,7 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navi
 
     try {
       await resetPassword(trimmedEmail);
+      soundService.playSuccessSound();
       setSuccessMessage(
         'Un e-mail de réinitialisation vous a été envoyé. Veuillez vérifier votre boîte de réception.'
       );
@@ -67,53 +68,87 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navi
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.flexContainer}
+      style={[styles.flexContainer, { backgroundColor: tokens.bg }]}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         {/* Navigation Back */}
         <View style={styles.topBar}>
           <IconButton
             icon="arrow-left"
             size={24}
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
+            iconColor={tokens.text}
+            onPress={() => {
+              soundService.playPopSound();
+              navigation.goBack();
+            }}
+            style={[
+              styles.backButton,
+              {
+                backgroundColor: tokens.card,
+                borderColor: tokens.border,
+                borderWidth: 1,
+              },
+            ]}
           />
         </View>
 
         {/* Header */}
         <View style={styles.header}>
-          <Text variant="displaySmall" style={styles.icon}>
-            🔑
-          </Text>
-          <Text variant="headlineMedium" style={styles.screenTitle}>
+          <View
+            style={[
+              styles.logoBadge,
+              {
+                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.9)',
+                borderColor: tokens.border,
+              },
+            ]}
+          >
+            <Text style={{ fontSize: 36 }}>🔑</Text>
+          </View>
+          <Text variant="headlineMedium" style={[styles.screenTitle, { color: tokens.text }]}>
             Mot de passe oublié
           </Text>
-          <Text variant="bodyMedium" style={styles.subtitle}>
+          <Text variant="bodyMedium" style={[styles.subtitle, { color: tokens.textSecondary }]}>
             Saisissez votre e-mail pour recevoir les instructions de réinitialisation.
           </Text>
         </View>
 
         {/* Reset Form */}
-        <View style={styles.form}>
+        <View
+          style={[
+            styles.glassCard,
+            {
+              backgroundColor: tokens.card,
+              borderColor: tokens.border,
+            },
+          ]}
+        >
           {successMessage ? (
-            <Surface style={styles.successCard}>
-              <Text variant="titleMedium" style={styles.successTitle}>
-                ✓ E-mail envoyé
+            <View style={styles.successCard}>
+              <Text variant="titleMedium" style={{ color: tokens.secondary, fontWeight: '800', marginBottom: 8 }}>
+                ✓ E-mail envoyé avec succès !
               </Text>
-              <Text variant="bodyMedium" style={styles.successText}>
+              <Text variant="bodyMedium" style={{ color: tokens.text, textAlign: 'center', marginBottom: 16 }}>
                 {successMessage}
               </Text>
               <Button
                 mode="contained"
-                onPress={() => navigation.goBack()}
-                style={styles.returnButton}
+                onPress={() => {
+                  soundService.playPopSound();
+                  navigation.goBack();
+                }}
+                buttonColor={tokens.primary}
+                textColor="#FFFFFF"
+                style={styles.submitButton}
+                labelStyle={{ fontWeight: '800' }}
               >
                 Retour à la connexion
               </Button>
-            </Surface>
+            </View>
           ) : (
             <>
               <TextInput
@@ -126,6 +161,9 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navi
                 autoCorrect={false}
                 left={<TextInput.Icon icon="email-outline" />}
                 style={styles.input}
+                textColor={tokens.text}
+                outlineColor={tokens.borderSubtle}
+                activeOutlineColor={tokens.primary}
                 disabled={loading}
               />
 
@@ -134,16 +172,23 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navi
                 onPress={handleResetPassword}
                 loading={loading}
                 disabled={loading}
+                buttonColor={tokens.primary}
+                textColor="#FFFFFF"
                 style={styles.submitButton}
                 contentStyle={styles.buttonContent}
+                labelStyle={{ fontWeight: '800', fontSize: 15 }}
               >
-                Réinitialiser
+                Envoyer le lien
               </Button>
 
               <Button
                 mode="text"
-                onPress={() => navigation.goBack()}
+                onPress={() => {
+                  soundService.playPopSound();
+                  navigation.goBack();
+                }}
                 disabled={loading}
+                textColor={tokens.textSecondary}
                 style={styles.cancelButton}
               >
                 Annuler
@@ -158,16 +203,10 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navi
           onDismiss={() => {
             setSnackbarVisible(false);
             setErrorMessage(null);
+            clearError?.();
           }}
           duration={5000}
-          action={{
-            label: 'OK',
-            onPress: () => {
-              setSnackbarVisible(false);
-              setErrorMessage(null);
-            },
-          }}
-          style={successMessage ? styles.successSnackbar : styles.errorSnackbar}
+          style={{ backgroundColor: successMessage ? tokens.secondary : tokens.error }}
         >
           {errorMessage || authError || successMessage || ''}
         </Snackbar>
@@ -179,89 +218,78 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navi
 const styles = StyleSheet.create({
   flexContainer: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
-    maxWidth: 480,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    maxWidth: 440,
     width: '100%',
     alignSelf: 'center',
   },
   topBar: {
-    marginBottom: spacing.xs,
+    marginBottom: 8,
+    alignItems: 'flex-start',
   },
   backButton: {
+    borderRadius: 16,
     margin: 0,
   },
   header: {
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: 24,
   },
-  icon: {
-    fontSize: 48,
-    marginBottom: spacing.xs,
+  logoBadge: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    borderWidth: 1.5,
+    shadowColor: '#0A84FF',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    elevation: 3,
   },
   screenTitle: {
-    fontWeight: '700',
-    color: colors.primary,
+    fontWeight: '900',
+    letterSpacing: -0.5,
   },
   subtitle: {
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
+    marginTop: 4,
     textAlign: 'center',
-    paddingHorizontal: spacing.md,
   },
-  form: {
-    backgroundColor: colors.surface,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
+  glassCard: {
+    padding: 24,
+    borderRadius: 28,
+    borderWidth: 1,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
     elevation: 3,
   },
   input: {
-    marginBottom: spacing.lg,
+    marginBottom: 14,
+    backgroundColor: 'transparent',
   },
   submitButton: {
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.sm,
+    borderRadius: 20,
+    marginTop: 8,
+    marginBottom: 10,
   },
   cancelButton: {
-    borderRadius: borderRadius.md,
+    borderRadius: 20,
   },
   buttonContent: {
-    paddingVertical: spacing.xs,
+    paddingVertical: 6,
   },
   successCard: {
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    backgroundColor: '#E8F5E9',
     alignItems: 'center',
-  },
-  successTitle: {
-    color: colors.success,
-    fontWeight: '700',
-    marginBottom: spacing.xs,
-  },
-  successText: {
-    color: colors.text,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
-  returnButton: {
-    borderRadius: borderRadius.md,
-    width: '100%',
-  },
-  errorSnackbar: {
-    backgroundColor: colors.error,
-  },
-  successSnackbar: {
-    backgroundColor: colors.success,
+    paddingVertical: 8,
   },
 });
 

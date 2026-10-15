@@ -12,11 +12,11 @@ import {
   Button,
   TextInput,
   Snackbar,
-  useTheme,
   IconButton,
 } from 'react-native-paper';
 import { useAuth } from '../../hooks/useAuth';
-import { colors, spacing, borderRadius } from '../../constants/theme';
+import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
+import { soundService } from '../../services/soundService';
 
 interface RegisterScreenProps {
   navigation: {
@@ -26,11 +26,12 @@ interface RegisterScreenProps {
 }
 
 /**
- * Registration screen for creating a new ColocManager user account.
+ * Apple Liquid Glass Registration Screen
  */
 export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
-  const paperTheme = useTheme();
-  const { register, loading, error: authError } = useAuth();
+  const { isDark } = useThemeStore();
+  const tokens = getLiquidGlassTokens(isDark);
+  const { register, loading, error: authError, clearError } = useAuth();
 
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
@@ -42,10 +43,8 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
 
-  /**
-   * Validates form inputs and dispatches registration.
-   */
   const handleRegister = async () => {
+    soundService.playPopSound();
     const trimmedName = displayName.trim();
     const trimmedEmail = email.trim();
 
@@ -76,6 +75,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
 
     try {
       await register(trimmedEmail, password, trimmedName);
+      soundService.playSuccessSound();
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Erreur lors de l'inscription. Réessayez.";
@@ -87,34 +87,65 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.flexContainer}
+      style={[styles.flexContainer, { backgroundColor: tokens.bg }]}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        {/* Back Button */}
+        {/* Top Bar with Back Button */}
         <View style={styles.topBar}>
           <IconButton
             icon="arrow-left"
             size={24}
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
+            iconColor={tokens.text}
+            onPress={() => {
+              soundService.playPopSound();
+              navigation.goBack();
+            }}
+            style={[
+              styles.backButton,
+              {
+                backgroundColor: tokens.card,
+                borderColor: tokens.border,
+                borderWidth: 1,
+              },
+            ]}
           />
         </View>
 
         {/* Header */}
         <View style={styles.header}>
-          <Text variant="headlineMedium" style={styles.screenTitle}>
+          <View
+            style={[
+              styles.logoBadge,
+              {
+                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.9)',
+                borderColor: tokens.border,
+              },
+            ]}
+          >
+            <Text style={{ fontSize: 36 }}>✨</Text>
+          </View>
+          <Text variant="headlineMedium" style={[styles.screenTitle, { color: tokens.text }]}>
             Créer un compte
           </Text>
-          <Text variant="bodyMedium" style={styles.subtitle}>
+          <Text variant="bodyMedium" style={[styles.subtitle, { color: tokens.textSecondary }]}>
             Rejoignez ou créez une colocation en quelques secondes
           </Text>
         </View>
 
-        {/* Input Form */}
-        <View style={styles.form}>
+        {/* Glass Card Form */}
+        <View
+          style={[
+            styles.glassCard,
+            {
+              backgroundColor: tokens.card,
+              borderColor: tokens.border,
+            },
+          ]}
+        >
           <TextInput
             label="Nom ou Pseudo"
             value={displayName}
@@ -123,6 +154,9 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
             autoCapitalize="words"
             left={<TextInput.Icon icon="account-outline" />}
             style={styles.input}
+            textColor={tokens.text}
+            outlineColor={tokens.borderSubtle}
+            activeOutlineColor={tokens.primary}
             disabled={loading}
           />
 
@@ -136,6 +170,9 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
             autoCorrect={false}
             left={<TextInput.Icon icon="email-outline" />}
             style={styles.input}
+            textColor={tokens.text}
+            outlineColor={tokens.borderSubtle}
+            activeOutlineColor={tokens.primary}
             disabled={loading}
           />
 
@@ -154,6 +191,9 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
               />
             }
             style={styles.input}
+            textColor={tokens.text}
+            outlineColor={tokens.borderSubtle}
+            activeOutlineColor={tokens.primary}
             disabled={loading}
           />
 
@@ -172,6 +212,9 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
               />
             }
             style={styles.input}
+            textColor={tokens.text}
+            outlineColor={tokens.borderSubtle}
+            activeOutlineColor={tokens.primary}
             disabled={loading}
           />
 
@@ -181,25 +224,28 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
             onPress={handleRegister}
             loading={loading}
             disabled={loading}
+            buttonColor={tokens.primary}
+            textColor="#FFFFFF"
             style={styles.submitButton}
             contentStyle={styles.buttonContent}
+            labelStyle={{ fontWeight: '800', fontSize: 15 }}
           >
             S'inscrire
           </Button>
 
           {/* Back to Login Link */}
           <View style={styles.footer}>
-            <Text variant="bodyMedium" style={styles.footerText}>
+            <Text variant="bodyMedium" style={{ color: tokens.textSecondary }}>
               Vous avez déjà un compte ?{' '}
             </Text>
             <TouchableOpacity
-              onPress={() => navigation.navigate('Login')}
+              onPress={() => {
+                soundService.playPopSound();
+                navigation.navigate('Login');
+              }}
               disabled={loading}
             >
-              <Text
-                variant="bodyMedium"
-                style={[styles.linkBold, { color: paperTheme.colors.primary }]}
-              >
+              <Text variant="bodyMedium" style={{ color: tokens.primary, fontWeight: '800' }}>
                 Se connecter
               </Text>
             </TouchableOpacity>
@@ -212,16 +258,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
           onDismiss={() => {
             setSnackbarVisible(false);
             setErrorMessage(null);
+            clearError?.();
           }}
           duration={4000}
-          action={{
-            label: 'OK',
-            onPress: () => {
-              setSnackbarVisible(false);
-              setErrorMessage(null);
-            },
-          }}
-          style={styles.snackbar}
+          style={{ backgroundColor: tokens.error }}
         >
           {errorMessage || authError || 'Une erreur est survenue.'}
         </Snackbar>
@@ -233,71 +273,77 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
 const styles = StyleSheet.create({
   flexContainer: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
-    maxWidth: 480,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    maxWidth: 440,
     width: '100%',
     alignSelf: 'center',
   },
   topBar: {
-    marginBottom: spacing.xs,
+    marginBottom: 8,
+    alignItems: 'flex-start',
   },
   backButton: {
+    borderRadius: 16,
     margin: 0,
   },
   header: {
-    marginBottom: spacing.lg,
     alignItems: 'center',
+    marginBottom: 24,
+  },
+  logoBadge: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    borderWidth: 1.5,
+    shadowColor: '#0A84FF',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    elevation: 3,
   },
   screenTitle: {
-    fontWeight: '700',
-    color: colors.primary,
+    fontWeight: '900',
+    letterSpacing: -0.5,
   },
   subtitle: {
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
+    marginTop: 4,
     textAlign: 'center',
   },
-  form: {
-    backgroundColor: colors.surface,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
+  glassCard: {
+    padding: 24,
+    borderRadius: 28,
+    borderWidth: 1,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
     elevation: 3,
   },
   input: {
-    marginBottom: spacing.md,
+    marginBottom: 14,
+    backgroundColor: 'transparent',
   },
   submitButton: {
-    borderRadius: borderRadius.md,
-    marginTop: spacing.xs,
-    marginBottom: spacing.md,
+    borderRadius: 20,
+    marginTop: 8,
+    marginBottom: 16,
   },
   buttonContent: {
-    paddingVertical: spacing.xs,
+    paddingVertical: 6,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: spacing.sm,
-  },
-  footerText: {
-    color: colors.textSecondary,
-  },
-  linkBold: {
-    fontWeight: '700',
-  },
-  snackbar: {
-    backgroundColor: colors.error,
+    marginTop: 6,
   },
 });
 

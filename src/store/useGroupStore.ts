@@ -104,10 +104,10 @@ export const useGroupStore = create<GroupState>((set, get) => ({
         error: null,
       });
     } catch (error: any) {
+      console.warn('loadUserGroup caught error:', error);
       const errorMessage =
         error?.message || 'Erreur lors du chargement de la colocation.';
-      set({ error: errorMessage, isLoading: false });
-      throw error;
+      set({ group: null, members: [], error: errorMessage, isLoading: false });
     }
   },
 
