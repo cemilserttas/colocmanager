@@ -26,6 +26,7 @@ import { soundService } from '../../services/soundService';
 import { notificationService } from '../../services/notificationService';
 import { colors, spacing, borderRadius } from '../../constants/theme';
 import { CleaningFrequency, GroupMember } from '../../types';
+import { parseUserDate } from '../../services/cleaningService';
 
 /**
  * Resolves a user ID to a member display name.
@@ -123,9 +124,9 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
       return;
     }
 
-    const parsedDate = new Date(dueDateText);
-    if (isNaN(parsedDate.getTime())) {
-      setErrorMessage("La date d'échéance est invalide. Format attendu : AAAA-MM-JJ");
+    const parsedDate = parseUserDate(dueDateText);
+    if (!parsedDate || isNaN(parsedDate.getTime())) {
+      setErrorMessage("La date d'échéance est invalide. Formats acceptés : AAAA-MM-JJ (ex: 2026-10-21) ou JJ/MM/AAAA");
       setSnackbarVisible(true);
       return;
     }
@@ -292,22 +293,69 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
           {/* First Due Date */}
           <View style={[styles.cardSection, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
             <Text variant="titleSmall" style={[styles.sectionLabel, { color: tokens.text }]}>
-              {t('dueDate') || "Première date d'échéance"} (AAAA-MM-JJ)
+              {t('dueDate') || "Première date d'échéance"}
             </Text>
-            <TextInput
-              placeholder="2026-10-25"
-              value={dueDateText}
-              onChangeText={setDueDateText}
-              mode="outlined"
-              textColor={tokens.text}
-              style={[styles.input, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.8)' }]}
-              outlineColor={tokens.border}
-              activeOutlineColor={tokens.accent}
-              disabled={submitting}
-            />
+            
+            {/* HTML5 native date picker on web, standard TextInput on mobile */}
+            {Platform.OS === 'web' ? (
+              <View style={{ marginBottom: 12 }}>
+                <input
+                  type="date"
+                  value={dueDateText}
+                  onChange={(e: any) => setDueDateText(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: 14,
+                    border: `1.5px solid ${tokens.border}`,
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
+                    color: tokens.text,
+                    fontSize: 15,
+                    fontWeight: 600,
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    cursor: 'pointer',
+                  }}
+                  disabled={submitting}
+                />
+              </View>
+            ) : (
+              <TextInput
+                placeholder="AAAA-MM-JJ (ex: 2026-10-21)"
+                value={dueDateText}
+                onChangeText={setDueDateText}
+                mode="outlined"
+                textColor={tokens.text}
+                style={[styles.input, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.8)' }]}
+                outlineColor={tokens.border}
+                activeOutlineColor={tokens.accent}
+                disabled={submitting}
+              />
+            )}
+
+            {/* Quick helper preview */}
+            {dueDateText ? (
+              <Text variant="labelSmall" style={{ color: tokens.primary, marginBottom: 8, fontWeight: '700' }}>
+                📅 Échéance sélectionnée : {(() => {
+                  const d = parseUserDate(dueDateText);
+                  return d ? d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : 'Format invalide';
+                })()}
+              </Text>
+            ) : null}
 
             {/* Date presets */}
             <View style={styles.presetsRow}>
+              <Chip
+                compact
+                onPress={() => {
+                  soundService.playPopSound();
+                  setDueDateText(getFutureDateString(0));
+                }}
+                style={[styles.presetChip, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}
+                textStyle={{ color: tokens.text, fontSize: 12 }}
+              >
+                Aujourd'hui
+              </Chip>
               <Chip
                 compact
                 onPress={() => {
@@ -323,23 +371,12 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
                 compact
                 onPress={() => {
                   soundService.playPopSound();
-                  setDueDateText(getFutureDateString(3));
-                }}
-                style={[styles.presetChip, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}
-                textStyle={{ color: tokens.text, fontSize: 12 }}
-              >
-                Dans 3 jours
-              </Chip>
-              <Chip
-                compact
-                onPress={() => {
-                  soundService.playPopSound();
                   setDueDateText(getFutureDateString(7));
                 }}
                 style={[styles.presetChip, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}
                 textStyle={{ color: tokens.text, fontSize: 12 }}
               >
-                Dans 7 jours
+                Dans 1 semaine
               </Chip>
               <Chip
                 compact
@@ -350,7 +387,7 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
                 style={[styles.presetChip, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}
                 textStyle={{ color: tokens.text, fontSize: 12 }}
               >
-                Dans 14 jours
+                Dans 2 semaines
               </Chip>
             </View>
           </View>

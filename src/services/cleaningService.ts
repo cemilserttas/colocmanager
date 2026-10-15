@@ -23,9 +23,11 @@ const notifyCleaningSubscribers = (tasks: CleaningTask[]) => {
 
 export function calculateNextDueDate(
   frequency: CleaningFrequency,
-  baseDate: Date = new Date()
+  baseDate: Date | string = new Date()
 ): Date {
-  const next = new Date(baseDate.getTime());
+  const parsedBase = typeof baseDate === 'string' ? parseUserDate(baseDate) || new Date() : new Date(baseDate.getTime());
+  const next = new Date(parsedBase.getTime());
+  
   switch (frequency) {
     case 'weekly':
       next.setDate(next.getDate() + 7);
@@ -39,7 +41,52 @@ export function calculateNextDueDate(
     default:
       next.setDate(next.getDate() + 7);
   }
+
+  // If the calculated next due date is already in the past, roll it forward until it's in the future
+  const now = Date.now();
+  while (next.getTime() <= now) {
+    if (frequency === 'monthly') {
+      next.setMonth(next.getMonth() + 1);
+    } else if (frequency === 'biweekly') {
+      next.setDate(next.getDate() + 14);
+    } else {
+      next.setDate(next.getDate() + 7);
+    }
+  }
+
   return next;
+}
+
+/**
+ * Robust date parser supporting YYYY-MM-DD, DD/MM/YYYY, ISO, and standard date strings.
+ */
+export function parseUserDate(input: string): Date | null {
+  if (!input) return null;
+  const trimmed = input.trim();
+
+  // Try YYYY-MM-DD or YYYY/MM/DD
+  const isoMatch = trimmed.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  if (isoMatch) {
+    const year = parseInt(isoMatch[1], 10);
+    const month = parseInt(isoMatch[2], 10) - 1;
+    const day = parseInt(isoMatch[3], 10);
+    const d = new Date(year, month, day, 12, 0, 0);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // Try DD-MM-YYYY or DD/MM/YYYY (French standard format)
+  const frMatch = trimmed.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  if (frMatch) {
+    const day = parseInt(frMatch[1], 10);
+    const month = parseInt(frMatch[2], 10) - 1;
+    const year = parseInt(frMatch[3], 10);
+    const d = new Date(year, month, day, 12, 0, 0);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // Fallback to built-in Date constructor
+  const parsed = new Date(trimmed);
+  return isNaN(parsed.getTime()) ? null : parsed;
 }
 
 export const cleaningService = {
@@ -223,7 +270,7 @@ export const cleaningService = {
 
       const task = taskSnap.data() as CleaningTask;
       const nextTurnIndex = (task.currentTurnIndex + 1) % task.rotationOrder.length;
-      const nextDueDate = calculateNextDueDate(task.frequency);
+      const nextDueDate = calculateNextDueDate(task.frequency, task.nextDueDate);
       const now = new Date().toISOString();
 
       await updateDoc(taskRef, {
