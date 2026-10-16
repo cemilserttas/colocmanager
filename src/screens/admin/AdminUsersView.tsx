@@ -64,7 +64,7 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({
     } else if (filter === 'suspended') {
       list = list.filter((u) => u.status === 'suspended');
     } else if (filter === 'admins') {
-      list = list.filter((u) => u.isSuperAdmin === true);
+      list = list.filter((u) => adminService.isSuperAdmin(u));
     }
 
     // Search query
@@ -215,7 +215,7 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({
             style={[styles.chip, filter === 'admins' && { backgroundColor: tokens.adminGold }]}
             textStyle={{ color: filter === 'admins' ? '#FFFFFF' : tokens.text, fontWeight: '700' }}
           >
-            👑 Super-Admins ({users.filter((u) => u.isSuperAdmin === true).length})
+            👑 Super-Admins ({users.filter((u) => adminService.isSuperAdmin(u)).length})
           </Chip>
         </ScrollView>
       </View>
@@ -242,7 +242,7 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({
         <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
           {filteredUsers.map((u) => {
             const isSuspended = u.status === 'suspended';
-            const isSuperAdmin = u.isSuperAdmin === true;
+            const isSuperAdmin = adminService.isSuperAdmin(u);
             const isSelf = u.uid === currentUser?.uid;
 
             return (

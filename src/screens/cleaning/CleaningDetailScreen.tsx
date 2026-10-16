@@ -359,7 +359,10 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
   }
 
   const rotationList = task.rotationOrder || [];
-  const currentTurnIndex = task.currentTurnIndex % (rotationList.length || 1);
+  const currentTurnIndex =
+    rotationList.length > 0
+      ? (((task.currentTurnIndex ?? 0) % rotationList.length) + rotationList.length) % rotationList.length
+      : 0;
   const overdue = isOverdue(task.nextDueDate);
 
   return (

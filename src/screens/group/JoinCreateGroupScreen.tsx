@@ -19,6 +19,7 @@ import { useGroup } from '../../hooks/useGroup';
 import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
 import { useLanguageStore } from '../../store/useLanguageStore';
 import { soundService } from '../../services/soundService';
+import { adminService } from '../../services/adminService';
 
 interface JoinCreateGroupScreenProps {
   navigation: {
@@ -270,7 +271,7 @@ export const JoinCreateGroupScreen: React.FC<JoinCreateGroupScreenProps> = ({ na
         </TouchableOpacity>
 
         {/* Direct Super-Admin Portal Access Button */}
-        {user?.isSuperAdmin && (
+        {adminService.isSuperAdmin(user) && (
           <Button
             mode="contained-tonal"
             buttonColor={isDark ? 'rgba(255, 214, 10, 0.2)' : 'rgba(255, 214, 10, 0.25)'}

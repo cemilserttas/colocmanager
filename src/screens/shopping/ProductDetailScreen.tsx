@@ -250,7 +250,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
   const rotationList = product.rotationOrder || [];
   const currentTurnIndex =
     rotationList.length > 0
-      ? ((product.currentTurnIndex % rotationList.length) + rotationList.length) % rotationList.length
+      ? (((product.currentTurnIndex ?? 0) % rotationList.length) + rotationList.length) % rotationList.length
       : 0;
 
   return (

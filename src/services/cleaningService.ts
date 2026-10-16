@@ -371,8 +371,9 @@ export const cleaningService = {
     } catch {
       const tasks = await mockStorage.getCleaning();
       const t = tasks.find((x) => x.id === taskId || x.taskId === taskId);
-      if (t && t.rotationOrder.length > 0) {
-        t.currentTurnIndex = (t.currentTurnIndex + 1) % t.rotationOrder.length;
+      if (t) {
+        const rotationLen = t.rotationOrder?.length || 0;
+        t.currentTurnIndex = getNextTurnIndex(t.currentTurnIndex ?? 0, rotationLen);
         t.lastCleanedAt = new Date().toISOString();
         t.lastCleanedBy = cleanerUid;
         t.nextDueDate = calculateNextDueDate(t.frequency, t.nextDueDate).toISOString();

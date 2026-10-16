@@ -22,6 +22,7 @@ import { useLanguageStore } from '../../store/useLanguageStore';
 import { soundService } from '../../services/soundService';
 import { colors, spacing, borderRadius } from '../../constants/theme';
 import { Product, GroupMember } from '../../types';
+import { getCurrentAssignee } from '../../utils/rotation';
 
 /**
  * Resolves a user ID to a member display name.
@@ -126,8 +127,7 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
    */
   const renderProductItem = ({ item }: { item: Product }) => {
     const rotationList = item.rotationOrder || [];
-    const currentBuyerUid =
-      rotationList.length > 0 ? rotationList[item.currentTurnIndex % rotationList.length] : null;
+    const currentBuyerUid = getCurrentAssignee(rotationList, item.currentTurnIndex ?? 0) || null;
 
     const isMyTurn = currentBuyerUid === user?.uid;
     const currentBuyerName = currentBuyerUid

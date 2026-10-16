@@ -8,11 +8,12 @@
 import React, { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { paperLightTheme, paperDarkTheme } from './src/constants/theme';
 import AppNavigator from './src/navigation/AppNavigator';
+import { RootStackParamList } from './src/navigation/types';
 import { notificationService } from './src/services/notificationService';
 import { useThemeStore } from './src/store/useThemeStore';
 import { useLanguageStore } from './src/store/useLanguageStore';
@@ -22,8 +23,62 @@ import { NotificationStartupModal } from './src/components/common/NotificationSt
 // Import Firebase config to ensure initialization
 import './firebase.config';
 
+const linking: LinkingOptions<RootStackParamList> = {
+  prefixes: [
+    'https://colocmanager.vercel.app',
+    'http://localhost:8081',
+    'colocmanager://',
+  ],
+  config: {
+    screens: {
+      Auth: {
+        screens: {
+          Login: 'login',
+          Register: 'register',
+          ForgotPassword: 'forgot-password',
+        },
+      },
+      JoinCreateGroup: 'join',
+      AdminPortal: 'admin',
+      Main: {
+        screens: {
+          Dashboard: 'dashboard',
+          Shopping: {
+            screens: {
+              ShoppingList: 'shopping',
+              ProductDetail: 'shopping/:productId',
+              AddProduct: 'shopping-add',
+            },
+          },
+          Cleaning: {
+            screens: {
+              CleaningList: 'cleaning',
+              CleaningDetail: 'cleaning/:taskId',
+              AddCleaningTask: 'cleaning-add',
+            },
+          },
+          Profile: {
+            screens: {
+              ProfileMain: 'profile',
+              ManageMembers: 'members',
+              AdminPortal: 'admin-portal',
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
 export default function App() {
   const { isDark } = useThemeStore();
+
+  useEffect(() => {
+    // Dynamic body background color on web for seamless liquid glass styling
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      document.body.style.backgroundColor = isDark ? '#0B0D17' : '#F8FAFC';
+    }
+  }, [isDark]);
 
   useEffect(() => {
     // Initialize preferences, themes and internationalization
@@ -62,7 +117,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <PaperProvider theme={isDark ? paperDarkTheme : paperLightTheme}>
-        <NavigationContainer>
+        <NavigationContainer linking={linking}>
           <StatusBar style={isDark ? 'light' : 'dark'} />
           <AppNavigator />
           <NotificationStartupModal />

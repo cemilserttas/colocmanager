@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../hooks/useAuth';
 import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
+import { useLanguageStore } from '../../store/useLanguageStore';
 import { soundService } from '../../services/soundService';
 
 interface ForgotPasswordScreenProps {
@@ -32,6 +33,7 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navi
   const insets = useSafeAreaInsets();
   const { isDark } = useThemeStore();
   const tokens = getLiquidGlassTokens(isDark);
+  const { t } = useLanguageStore();
   const { resetPassword, loading, error: authError, clearError } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -118,10 +120,10 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navi
             <Text style={{ fontSize: 36 }}>🔑</Text>
           </View>
           <Text variant="headlineMedium" style={[styles.screenTitle, { color: tokens.text }]}>
-            Mot de passe oublié
+            {t('forgotPasswordTitle')}
           </Text>
           <Text variant="bodyMedium" style={[styles.subtitle, { color: tokens.textSecondary }]}>
-            Saisissez votre e-mail pour recevoir les instructions de réinitialisation.
+            {t('forgotPasswordSubtitle')}
           </Text>
         </View>
 
@@ -154,13 +156,13 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navi
                 style={styles.submitButton}
                 labelStyle={{ fontWeight: '800' }}
               >
-                Retour à la connexion
+                {t('backToLogin')}
               </Button>
             </View>
           ) : (
             <>
               <TextInput
-                label="Adresse e-mail"
+                label={t('emailLabel')}
                 value={email}
                 onChangeText={setEmail}
                 mode="outlined"
@@ -186,7 +188,7 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navi
                 contentStyle={styles.buttonContent}
                 labelStyle={{ fontWeight: '800', fontSize: 15 }}
               >
-                Envoyer le lien
+                {t('sendResetLink')}
               </Button>
 
               <Button
@@ -199,7 +201,7 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navi
                 textColor={tokens.textSecondary}
                 style={styles.cancelButton}
               >
-                Annuler
+                {t('back')}
               </Button>
             </>
           )}

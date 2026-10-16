@@ -16,6 +16,7 @@ import {
 import { db } from '../../firebase.config';
 import { AppNotification, NotificationType, Product, CleaningTask } from '../types';
 import { isDemoMode, mockStorage } from './mockStorage';
+import { getCurrentAssignee } from '../utils/rotation';
 
 /**
  * Service managing push tokens, local scheduled notifications,
@@ -309,7 +310,7 @@ export const notificationService = {
       // 1. Check shopping items where it's currently userId's turn
       for (const p of products) {
         if (!p.isActive || !p.rotationOrder || p.rotationOrder.length === 0) continue;
-        const currentBuyer = p.rotationOrder[p.currentTurnIndex % p.rotationOrder.length];
+        const currentBuyer = getCurrentAssignee(p.rotationOrder, p.currentTurnIndex ?? 0);
         if (currentBuyer === userId) {
           const hasRecentReminder = existingNotifs.some((n) => {
             const notifTime = new Date(n.createdAt).getTime();
@@ -335,7 +336,7 @@ export const notificationService = {
       // 2. Check cleaning tasks where it's currently userId's turn and due soon or overdue
       for (const t of tasks) {
         if (!t.isActive || !t.rotationOrder || t.rotationOrder.length === 0) continue;
-        const currentCleaner = t.rotationOrder[t.currentTurnIndex % t.rotationOrder.length];
+        const currentCleaner = getCurrentAssignee(t.rotationOrder, t.currentTurnIndex ?? 0);
         if (currentCleaner === userId && t.nextDueDate) {
           const dueDate = new Date(t.nextDueDate).getTime();
           const isOverdue = dueDate < Date.now();

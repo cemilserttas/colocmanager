@@ -227,8 +227,9 @@ export const shoppingService = {
     } catch {
       const products = await mockStorage.getProducts();
       const p = products.find((x) => x.id === productId || x.productId === productId);
-      if (p && p.rotationOrder.length > 0) {
-        p.currentTurnIndex = (p.currentTurnIndex + 1) % p.rotationOrder.length;
+      if (p) {
+        const rotationLen = p.rotationOrder?.length || 0;
+        p.currentTurnIndex = getNextTurnIndex(p.currentTurnIndex ?? 0, rotationLen);
         p.lastPurchasedAt = new Date().toISOString();
         p.lastPurchasedBy = buyerUid;
         await mockStorage.setProducts(products);

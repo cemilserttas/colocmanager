@@ -68,6 +68,23 @@ export const groupService = {
         createdAt: new Date().toISOString(),
       };
       await mockStorage.setGroup(newGroup);
+      const adminMember: GroupMember = {
+        id: adminUid,
+        memberId: adminUid,
+        userId: adminUid,
+        groupId: newGroup.id,
+        role: 'admin',
+        orderIndex: 0,
+        joinedAt: newGroup.createdAt,
+        displayName: 'Admin',
+      };
+      await mockStorage.setMembers([adminMember]);
+      memberSubscribers.forEach((cb) => cb([adminMember]));
+      const user = await mockStorage.getUser();
+      if (user) {
+        user.groupId = newGroup.id;
+        await mockStorage.setUser(user);
+      }
       groupSubscribers.forEach((cb) => cb(newGroup));
       return newGroup;
     }
@@ -137,14 +154,37 @@ export const groupService = {
   async joinGroup(inviteCode: string, userId: string): Promise<Group> {
     if (isDemoMode()) {
       const group = await mockStorage.getGroup();
-      return group || {
+      const currentGroup = group || {
         id: 'group-1',
         name: '🏠 Coloc des Champions',
         inviteCode,
-        adminUid: userId,
+        adminUid: 'user-me',
         memberCount: 1,
         createdAt: new Date().toISOString(),
       };
+      const members = await mockStorage.getMembers();
+      if (!members.some((m) => m.userId === userId || m.id === userId)) {
+        const newMember: GroupMember = {
+          id: userId,
+          memberId: userId,
+          userId,
+          groupId: currentGroup.id,
+          displayName: 'Nouveau Colocataire',
+          email: 'coloc@demo.fr',
+          role: 'member',
+          orderIndex: members.length,
+          joinedAt: new Date().toISOString(),
+        };
+        members.push(newMember);
+        await mockStorage.setMembers(members);
+        memberSubscribers.forEach((cb) => cb(members));
+      }
+      const user = await mockStorage.getUser();
+      if (user) {
+        user.groupId = currentGroup.id;
+        await mockStorage.setUser(user);
+      }
+      return currentGroup;
     }
 
     try {

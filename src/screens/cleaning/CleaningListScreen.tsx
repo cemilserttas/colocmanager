@@ -23,6 +23,7 @@ import { useLanguageStore } from '../../store/useLanguageStore';
 import { soundService } from '../../services/soundService';
 import { colors, spacing, borderRadius } from '../../constants/theme';
 import { CleaningTask, GroupMember } from '../../types';
+import { getCurrentAssignee } from '../../utils/rotation';
 
 /**
  * Resolves a user ID to a member display name.
@@ -147,8 +148,7 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
    */
   const renderCleaningItem = ({ item }: { item: CleaningTask }) => {
     const rotationList = item.rotationOrder || [];
-    const currentCleanerUid =
-      rotationList.length > 0 ? rotationList[item.currentTurnIndex % rotationList.length] : null;
+    const currentCleanerUid = getCurrentAssignee(rotationList, item.currentTurnIndex ?? 0) || null;
 
     const isMyTurn = currentCleanerUid === user?.uid;
     const currentCleanerName = currentCleanerUid

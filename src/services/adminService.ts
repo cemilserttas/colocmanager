@@ -26,7 +26,7 @@ import {
   SystemBroadcast,
   CreateUserPayload,
 } from '../types';
-import { isDemoMode } from './mockStorage';
+import { isDemoMode, mockStorage } from './mockStorage';
 
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
   return Promise.race([
@@ -324,6 +324,51 @@ export const adminService = {
   ): Promise<void> {
     let targetName = `User ${userId}`;
 
+    if (isDemoMode()) {
+      const members = await mockStorage.getMembers();
+      const updatedMembers = members.filter((m) => m.userId !== userId && m.id !== userId);
+      await mockStorage.setMembers(updatedMembers);
+
+      const group = await mockStorage.getGroup();
+      if (group && typeof group.memberCount === 'number' && group.memberCount > 1) {
+        group.memberCount -= 1;
+        await mockStorage.setGroup(group);
+      }
+
+      const products = await mockStorage.getProducts();
+      let prodChanged = false;
+      products.forEach((p) => {
+        if (p.rotationOrder.includes(userId)) {
+          const { newOrder, newIndex } = removeFromRotation(p.rotationOrder, userId, p.currentTurnIndex);
+          p.rotationOrder = newOrder;
+          p.currentTurnIndex = newIndex;
+          prodChanged = true;
+        }
+      });
+      if (prodChanged) await mockStorage.setProducts(products);
+
+      const tasks = await mockStorage.getCleaning();
+      let taskChanged = false;
+      tasks.forEach((t) => {
+        if (t.rotationOrder.includes(userId)) {
+          const { newOrder, newIndex } = removeFromRotation(t.rotationOrder, userId, t.currentTurnIndex);
+          t.rotationOrder = newOrder;
+          t.currentTurnIndex = newIndex;
+          taskChanged = true;
+        }
+      });
+      if (taskChanged) await mockStorage.setCleaning(tasks);
+
+      await this.logAdminAction(
+        'DELETE_USER',
+        userId,
+        targetName,
+        'Compte utilisateur et appartenances supprimés définitivement',
+        adminUser
+      );
+      return;
+    }
+
     if (!isDemoMode()) {
       try {
         const userRef = doc(db, 'users', userId);
@@ -529,10 +574,18 @@ export const adminService = {
         await signOut(secondaryAuth).catch(() => {});
         await deleteApp(secondaryApp).catch(() => {});
       } catch (authErr: any) {
-        console.warn('Auth creation warning (creating Firestore record directly):', authErr.message);
         if (secondaryApp) {
           await deleteApp(secondaryApp).catch(() => {});
         }
+        let msg = authErr.message || "Erreur lors de la création de l'accès.";
+        if (authErr.code === 'auth/email-already-in-use') {
+          msg = 'Cette adresse e-mail est déjà utilisée par un autre compte.';
+        } else if (authErr.code === 'auth/weak-password') {
+          msg = 'Le mot de passe doit comporter au moins 6 caractères.';
+        } else if (authErr.code === 'auth/invalid-email') {
+          msg = "Format d'adresse e-mail invalide.";
+        }
+        throw new Error(msg);
       }
     }
 

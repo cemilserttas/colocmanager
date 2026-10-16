@@ -5,7 +5,8 @@ service cloud.firestore {
     // Helper to check if current authenticated user is SuperAdmin
     function isSuperAdmin() {
       return request.auth != null && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isSuperAdmin == true ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isSuperAdmin == true) ||
         request.auth.token.email == 'cemmil2000@gmail.com' ||
         request.auth.token.email.matches('.*admin.*')
       );
@@ -59,11 +60,14 @@ service cloud.firestore {
     // ==========================================
     match /products/{productId} {
       allow read: if request.auth != null && (isMemberOfProductGroup(productId) || isSuperAdmin());
-      allow create: if request.auth != null && (isAdminOfProductGroup(request.resource) || isSuperAdmin());
+      allow create: if request.auth != null && (
+        isAdminOfProductGroup(request.resource) ||
+        isMemberOfGroup(request.resource.data.groupId) ||
+        isSuperAdmin()
+      );
       allow delete: if request.auth != null && (isAdminOfProductGroup(resource) || isSuperAdmin());
       allow update: if request.auth != null && (
-        isAdminOfProductGroup(resource) ||
-        isCurrentBuyerOfProduct(productId) ||
+        isMemberOfGroup(resource.data.groupId) ||
         isSuperAdmin()
       );
 

@@ -27,6 +27,7 @@ import { notificationService } from '../../services/notificationService';
 import { NotificationBell } from '../../components/common/NotificationBell';
 import { GroupMember, SystemBroadcast } from '../../types';
 import { adminService } from '../../services/adminService';
+import { getCurrentAssignee } from '../../utils/rotation';
 
 const getMemberName = (uid: string, members: GroupMember[]): string => {
   const member = members.find((m) => m.userId === uid || m.id === uid);
@@ -131,13 +132,13 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
 
   const myShoppingTasks = products.filter((p) => {
     if (!p.isActive || !p.rotationOrder || p.rotationOrder.length === 0) return false;
-    const currentBuyerId = p.rotationOrder[p.currentTurnIndex % p.rotationOrder.length];
+    const currentBuyerId = getCurrentAssignee(p.rotationOrder, p.currentTurnIndex ?? 0);
     return currentBuyerId === user?.uid;
   });
 
   const myCleaningTasks = tasks.filter((t) => {
     if (!t.isActive || !t.rotationOrder || t.rotationOrder.length === 0) return false;
-    const currentCleanerId = t.rotationOrder[t.currentTurnIndex % t.rotationOrder.length];
+    const currentCleanerId = getCurrentAssignee(t.rotationOrder, t.currentTurnIndex ?? 0);
     return currentCleanerId === user?.uid;
   });
 
