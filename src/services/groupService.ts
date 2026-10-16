@@ -13,10 +13,11 @@ import {
   writeBatch,
   increment,
 } from 'firebase/firestore';
-import { db } from '../../firebase.config';
+import { auth, db } from '../../firebase.config';
 import { Group, GroupMember } from '../types';
 import { isDemoMode, mockStorage } from './mockStorage';
 import { notificationService } from './notificationService';
+import { removeFromRotation } from '../utils/rotation';
 
 /**
  * Helper to race any promise against a timeout
@@ -91,6 +92,22 @@ export const groupService = {
       batch.set(groupDocRef, newGroup);
 
       const memberDocRef = doc(db, 'groups', groupId, 'members', adminUid);
+      let resolvedName = auth.currentUser?.displayName?.trim() || '';
+      let resolvedEmail = auth.currentUser?.email?.trim() || '';
+      let resolvedPhoto = auth.currentUser?.photoURL || null;
+
+      if (!resolvedName || !resolvedEmail) {
+        try {
+          const userSnap = await getDoc(doc(db, 'users', adminUid));
+          if (userSnap.exists()) {
+            const uData = userSnap.data();
+            resolvedName = resolvedName || uData?.displayName || '';
+            resolvedEmail = resolvedEmail || uData?.email || '';
+            resolvedPhoto = resolvedPhoto || uData?.photoURL || null;
+          }
+        } catch (_) {}
+      }
+
       const adminMember: GroupMember = {
         id: adminUid,
         userId: adminUid,
@@ -98,9 +115,9 @@ export const groupService = {
         role: 'admin',
         orderIndex: 0,
         joinedAt: now,
-        displayName: 'Admin',
-        email: '',
-        photoURL: null,
+        displayName: resolvedName || 'Admin',
+        email: resolvedEmail,
+        photoURL: resolvedPhoto,
       };
       batch.set(memberDocRef, adminMember);
 
@@ -144,6 +161,22 @@ export const groupService = {
 
       // Add member record
       const memberDocRef = doc(db, 'groups', groupId, 'members', userId);
+      let resolvedName = auth.currentUser?.displayName?.trim() || '';
+      let resolvedEmail = auth.currentUser?.email?.trim() || '';
+      let resolvedPhoto = auth.currentUser?.photoURL || null;
+
+      if (!resolvedName || !resolvedEmail) {
+        try {
+          const userSnap = await getDoc(doc(db, 'users', userId));
+          if (userSnap.exists()) {
+            const uData = userSnap.data();
+            resolvedName = resolvedName || uData?.displayName || '';
+            resolvedEmail = resolvedEmail || uData?.email || '';
+            resolvedPhoto = resolvedPhoto || uData?.photoURL || null;
+          }
+        } catch (_) {}
+      }
+
       const newMember: GroupMember = {
         id: userId,
         userId,
@@ -151,9 +184,9 @@ export const groupService = {
         role: 'member',
         orderIndex: (group.memberCount || 1),
         joinedAt: now,
-        displayName: 'Colocataire',
-        email: '',
-        photoURL: null,
+        displayName: resolvedName || 'Colocataire',
+        email: resolvedEmail,
+        photoURL: resolvedPhoto,
       };
       batch.set(memberDocRef, newMember, { merge: true });
 
@@ -334,13 +367,114 @@ export const groupService = {
       const updated = members.filter((m) => m.userId !== userId && m.id !== userId);
       await mockStorage.setMembers(updated);
       memberSubscribers.forEach((cb) => cb(updated));
+
+      // Decrement group member count in demo mode
+      const group = await mockStorage.getGroup();
+      if (group && typeof group.memberCount === 'number' && group.memberCount > 1) {
+        group.memberCount -= 1;
+        await mockStorage.setGroup(group);
+        groupSubscribers.forEach((cb) => cb(group));
+      }
+
+      // Prune rotations in demo mode
+      const products = await mockStorage.getProducts();
+      let prodChanged = false;
+      products.forEach((p) => {
+        if (p.rotationOrder.includes(userId)) {
+          const { newOrder, newIndex } = removeFromRotation(p.rotationOrder, userId, p.currentTurnIndex);
+          p.rotationOrder = newOrder;
+          p.currentTurnIndex = newIndex;
+          prodChanged = true;
+        }
+      });
+      if (prodChanged) {
+        await mockStorage.setProducts(products);
+      }
+
+      const tasks = await mockStorage.getCleaning();
+      let taskChanged = false;
+      tasks.forEach((t) => {
+        if (t.rotationOrder.includes(userId)) {
+          const { newOrder, newIndex } = removeFromRotation(t.rotationOrder, userId, t.currentTurnIndex);
+          t.rotationOrder = newOrder;
+          t.currentTurnIndex = newIndex;
+          taskChanged = true;
+        }
+      });
+      if (taskChanged) {
+        await mockStorage.setCleaning(tasks);
+      }
       return;
     }
     try {
       const batch = writeBatch(db);
       batch.delete(doc(db, 'groups', groupId, 'members', userId));
       batch.update(doc(db, 'users', userId), { groupId: null });
+      batch.update(doc(db, 'groups', groupId), {
+        memberCount: increment(-1),
+        updatedAt: new Date().toISOString(),
+      });
       await withTimeout(batch.commit(), 2500, null);
+
+      // Clean up rotations in products
+      try {
+        const prodSnap = await getDocs(
+          query(collection(db, 'products'), where('groupId', '==', groupId))
+        );
+        const prodBatch = writeBatch(db);
+        let hasProdUpdates = false;
+        prodSnap.docs.forEach((d) => {
+          const data = d.data();
+          if (Array.isArray(data.rotationOrder) && data.rotationOrder.includes(userId)) {
+            const { newOrder, newIndex } = removeFromRotation(
+              data.rotationOrder,
+              userId,
+              data.currentTurnIndex ?? 0
+            );
+            prodBatch.update(d.ref, {
+              rotationOrder: newOrder,
+              currentTurnIndex: newIndex,
+              updatedAt: new Date().toISOString(),
+            });
+            hasProdUpdates = true;
+          }
+        });
+        if (hasProdUpdates) {
+          await withTimeout(prodBatch.commit(), 2500, null);
+        }
+      } catch (e) {
+        console.warn('Error pruning products rotation:', e);
+      }
+
+      // Clean up rotations in cleaning tasks
+      try {
+        const taskSnap = await getDocs(
+          query(collection(db, 'cleaningTasks'), where('groupId', '==', groupId))
+        );
+        const taskBatch = writeBatch(db);
+        let hasTaskUpdates = false;
+        taskSnap.docs.forEach((d) => {
+          const data = d.data();
+          if (Array.isArray(data.rotationOrder) && data.rotationOrder.includes(userId)) {
+            const { newOrder, newIndex } = removeFromRotation(
+              data.rotationOrder,
+              userId,
+              data.currentTurnIndex ?? 0
+            );
+            taskBatch.update(d.ref, {
+              rotationOrder: newOrder,
+              currentTurnIndex: newIndex,
+              updatedAt: new Date().toISOString(),
+            });
+            hasTaskUpdates = true;
+          }
+        });
+        if (hasTaskUpdates) {
+          await withTimeout(taskBatch.commit(), 2500, null);
+        }
+      } catch (e) {
+        console.warn('Error pruning cleaning tasks rotation:', e);
+      }
 
       notificationService
         .addNotificationToFirestore(

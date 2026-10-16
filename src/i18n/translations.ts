@@ -116,6 +116,28 @@ export const translations = {
     notificationsCenter: 'Notifications',
     allRead: 'Tout marquer comme lu',
     noNotifications: 'Aucune notification pour le moment',
+
+    // General & Navigation
+    back: 'Retour',
+    codeRegenerated: "Code d'accès renouvelé avec succès !",
+
+    // Auth
+    loginTitle: 'Connexion',
+    registerTitle: 'Créer un compte',
+    forgotPasswordTitle: 'Mot de passe oublié ?',
+    loginSubtitle: 'Gestion fluide & équitable de la colocation',
+    registerSubtitle: 'Rejoignez ou créez une colocation en quelques secondes',
+    forgotPasswordSubtitle: 'Entrez votre email pour réinitialiser votre mot de passe',
+    emailLabel: 'Adresse e-mail',
+    passwordLabel: 'Mot de passe',
+    confirmPasswordLabel: 'Confirmer le mot de passe',
+    nameLabel: 'Nom ou Pseudo',
+    loginBtn: 'Se connecter',
+    registerBtn: "S'inscrire",
+    newHere: 'Nouveau ici ? ',
+    alreadyHaveAccount: 'Vous avez déjà un compte ? ',
+    sendResetLink: 'Envoyer le lien',
+    backToLogin: 'Retour à la connexion',
   },
 
   en: {
@@ -230,6 +252,28 @@ export const translations = {
     notificationsCenter: 'Notifications',
     allRead: 'Mark all as read',
     noNotifications: 'No notifications at this time',
+
+    // General & Navigation
+    back: 'Back',
+    codeRegenerated: 'Access code renewed successfully!',
+
+    // Auth
+    loginTitle: 'Log In',
+    registerTitle: 'Create Account',
+    forgotPasswordTitle: 'Forgot Password?',
+    loginSubtitle: 'Smooth & fair flatshare management',
+    registerSubtitle: 'Join or create a flatshare in seconds',
+    forgotPasswordSubtitle: 'Enter your email to reset your password',
+    emailLabel: 'Email address',
+    passwordLabel: 'Password',
+    confirmPasswordLabel: 'Confirm password',
+    nameLabel: 'Name or Nickname',
+    loginBtn: 'Log In',
+    registerBtn: 'Sign Up',
+    newHere: 'New here? ',
+    alreadyHaveAccount: 'Already have an account? ',
+    sendResetLink: 'Send reset link',
+    backToLogin: 'Back to Log In',
   },
 } as const;
 

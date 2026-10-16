@@ -11,9 +11,12 @@ import {
   orderBy,
   limit,
   writeBatch,
+  increment,
 } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { auth, db } from '../../firebase.config';
+import { initializeApp, deleteApp } from 'firebase/app';
+import { getAuth, createUserWithEmailAndPassword, updateProfile, signOut } from 'firebase/auth';
+import { firebaseConfig, auth, db } from '../../firebase.config';
+import { removeFromRotation } from '../utils/rotation';
 import {
   User,
   Group,
@@ -330,10 +333,69 @@ export const adminService = {
           const userData = userSnap.data();
           targetName = userData.displayName || userData.email || targetName;
 
-          // Remove membership from group if member
+          // Remove membership from group if member, decrement memberCount, and prune rotations
           if (userData.groupId) {
+            const gId = userData.groupId;
             try {
-              await deleteDoc(doc(db, 'groups', userData.groupId, 'members', userId));
+              const batch = writeBatch(db);
+              batch.delete(doc(db, 'groups', gId, 'members', userId));
+              batch.update(doc(db, 'groups', gId), {
+                memberCount: increment(-1),
+                updatedAt: new Date().toISOString(),
+              });
+              await batch.commit();
+            } catch {}
+
+            // Prune products rotation
+            try {
+              const prodSnap = await getDocs(
+                query(collection(db, 'products'), where('groupId', '==', gId))
+              );
+              const pBatch = writeBatch(db);
+              let hasPUpdates = false;
+              prodSnap.docs.forEach((d) => {
+                const data = d.data();
+                if (Array.isArray(data.rotationOrder) && data.rotationOrder.includes(userId)) {
+                  const { newOrder, newIndex } = removeFromRotation(
+                    data.rotationOrder,
+                    userId,
+                    data.currentTurnIndex ?? 0
+                  );
+                  pBatch.update(d.ref, {
+                    rotationOrder: newOrder,
+                    currentTurnIndex: newIndex,
+                    updatedAt: new Date().toISOString(),
+                  });
+                  hasPUpdates = true;
+                }
+              });
+              if (hasPUpdates) await pBatch.commit();
+            } catch {}
+
+            // Prune cleaning tasks rotation
+            try {
+              const taskSnap = await getDocs(
+                query(collection(db, 'cleaningTasks'), where('groupId', '==', gId))
+              );
+              const tBatch = writeBatch(db);
+              let hasTUpdates = false;
+              taskSnap.docs.forEach((d) => {
+                const data = d.data();
+                if (Array.isArray(data.rotationOrder) && data.rotationOrder.includes(userId)) {
+                  const { newOrder, newIndex } = removeFromRotation(
+                    data.rotationOrder,
+                    userId,
+                    data.currentTurnIndex ?? 0
+                  );
+                  tBatch.update(d.ref, {
+                    rotationOrder: newOrder,
+                    currentTurnIndex: newIndex,
+                    updatedAt: new Date().toISOString(),
+                  });
+                  hasTUpdates = true;
+                }
+              });
+              if (hasTUpdates) await tBatch.commit();
             } catch {}
           }
         }
@@ -454,13 +516,23 @@ export const adminService = {
     let createdUid = `admin-gen-${Date.now()}`;
 
     if (!isDemoMode()) {
+      let secondaryApp: any = null;
       try {
-        // Attempt creating auth credential if possible
-        const cred = await createUserWithEmailAndPassword(auth, trimmedEmail, payload.password);
+        // Use a isolated secondary Firebase App instance so the current Super-Admin auth session is NOT overridden
+        const secondaryAppName = `AdminSecondary-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
+        const secondaryAuth = getAuth(secondaryApp);
+
+        const cred = await createUserWithEmailAndPassword(secondaryAuth, trimmedEmail, payload.password);
         createdUid = cred.user.uid;
         await updateProfile(cred.user, { displayName: trimmedName }).catch(() => {});
+        await signOut(secondaryAuth).catch(() => {});
+        await deleteApp(secondaryApp).catch(() => {});
       } catch (authErr: any) {
         console.warn('Auth creation warning (creating Firestore record directly):', authErr.message);
+        if (secondaryApp) {
+          await deleteApp(secondaryApp).catch(() => {});
+        }
       }
     }
 

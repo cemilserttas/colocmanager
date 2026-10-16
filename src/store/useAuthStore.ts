@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { User } from '../types';
 import { authService } from '../services/authService';
+import { useGroupStore } from './useGroupStore';
+import { useShoppingStore } from './useShoppingStore';
+import { useCleaningStore } from './useCleaningStore';
 
 /**
  * State and action interface for authentication store.
@@ -51,6 +54,11 @@ export interface AuthState {
    * Manually sets or clears the current user.
    */
   setUser: (user: User | null) => void;
+
+  /**
+   * Refreshes user profile from Firestore.
+   */
+  refreshUser: () => Promise<void>;
 }
 
 // Module-level variable to avoid duplicate onAuthStateChanged subscriptions
@@ -60,7 +68,7 @@ let authUnsubscribe: (() => void) | null = null;
  * Zustand store for managing authentication status, active user profile,
  * and authentication operations.
  */
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isLoading: true,
   isAuthenticated: false,
@@ -137,6 +145,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true, error: null });
     try {
       await authService.signOut();
+      // Purge cached flatshare data across stores to prevent stale data leak
+      useGroupStore.getState().reset();
+      useShoppingStore.getState().reset();
+      useCleaningStore.getState().reset();
       set({
         user: null,
         isAuthenticated: false,
@@ -172,6 +184,20 @@ export const useAuthStore = create<AuthState>((set) => ({
       user,
       isAuthenticated: !!user,
     });
+  },
+
+  refreshUser: async () => {
+    const current = get().user;
+    if (!current?.uid) return;
+    try {
+      const freshUser = await authService.getUserProfile(current.uid);
+      if (freshUser) {
+        set({
+          user: freshUser,
+          isAuthenticated: true,
+        });
+      }
+    } catch {}
   },
 }));
 

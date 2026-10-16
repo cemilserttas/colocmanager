@@ -1,4 +1,4 @@
-import { MD3LightTheme, MD3Theme } from 'react-native-paper';
+import { MD3LightTheme, MD3DarkTheme, MD3Theme } from 'react-native-paper';
 
 export const colors = {
   primary: '#4F46E5',        // Modern Indigo
@@ -59,9 +59,9 @@ export const theme = {
 };
 
 /**
- * React Native Paper MD3 theme mapped to ColocManager design tokens.
+ * React Native Paper MD3 light theme mapped to ColocManager design tokens.
  */
-export const paperTheme: MD3Theme = {
+export const paperLightTheme: MD3Theme = {
   ...MD3LightTheme,
   colors: {
     ...MD3LightTheme.colors,
@@ -77,6 +77,33 @@ export const paperTheme: MD3Theme = {
     onSurface: colors.text,
     onBackground: colors.text,
     onSurfaceVariant: colors.textSecondary,
+  },
+};
+
+/**
+ * Backward compatible alias for paperLightTheme
+ */
+export const paperTheme: MD3Theme = paperLightTheme;
+
+/**
+ * React Native Paper MD3 dark theme mapped to ColocManager design tokens.
+ */
+export const paperDarkTheme: MD3Theme = {
+  ...MD3DarkTheme,
+  colors: {
+    ...MD3DarkTheme.colors,
+    primary: colors.primary,
+    secondary: colors.secondary,
+    tertiary: colors.accent,
+    error: colors.error,
+    background: '#0B0D17',
+    surface: '#141624',
+    outline: 'rgba(255, 255, 255, 0.14)',
+    onPrimary: '#FFFFFF',
+    onSecondary: '#FFFFFF',
+    onSurface: '#F8FAFC',
+    onBackground: '#F8FAFC',
+    onSurfaceVariant: '#94A3B8',
   },
 };
 

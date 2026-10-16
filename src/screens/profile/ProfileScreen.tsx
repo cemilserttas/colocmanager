@@ -194,6 +194,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   };
 
   const handleConfirmLeaveGroup = async () => {
+    if (isAdmin && members.length > 1) {
+      setSnackbarMessage("En tant qu'administrateur, veuillez transférer votre rôle à un colocataire avant de quitter.");
+      setSnackbarVisible(true);
+      setLeaveGroupVisible(false);
+      return;
+    }
     setLeavingGroup(true);
     try {
       await leaveGroup();
@@ -560,6 +566,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
             <TouchableOpacity
               onPress={() => {
                 soundService.playPopSound();
+                if (isAdmin && members.length > 1) {
+                  setSnackbarMessage("En tant qu'administrateur, vous devez désigner un successeur (Céder Admin) avant de pouvoir quitter la colocation.");
+                  setSnackbarVisible(true);
+                  return;
+                }
                 setLeaveGroupVisible(true);
               }}
               style={styles.actionListItem}

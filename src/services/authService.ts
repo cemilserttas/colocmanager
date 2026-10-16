@@ -254,10 +254,59 @@ export const authService = {
           await updateProfile(auth.currentUser, authUpdates).catch(() => {});
         }
       }
+
+      // Synchronize member doc display name & photo if member of a group
+      if (data.displayName !== undefined || data.photoURL !== undefined) {
+        try {
+          const userSnap = await getDoc(userDocRef);
+          const groupId = userSnap.data()?.groupId;
+          if (groupId) {
+            const memberDocRef = doc(db, 'groups', groupId, 'members', uid);
+            const memberUpdates: Record<string, any> = {};
+            if (data.displayName !== undefined) memberUpdates.displayName = data.displayName;
+            if (data.photoURL !== undefined) memberUpdates.photoURL = data.photoURL;
+            await updateDoc(memberDocRef, memberUpdates).catch(() => {});
+          }
+        } catch (_) {}
+      }
     } catch (error: any) {
       console.error(`Error updating profile for user ${uid}:`, error);
       throw error;
     }
+  },
+
+  /**
+   * Directly fetches the fresh user document from Firestore or mock storage.
+   */
+  async getUserProfile(uid: string): Promise<User | null> {
+    if (isDemoMode()) {
+      return mockStorage.getUser();
+    }
+    try {
+      const snap = await withTimeout(getDoc(doc(db, 'users', uid)), 2500, null);
+      if (snap && snap.exists()) {
+        const data = snap.data();
+        const fbUser = auth.currentUser;
+        return {
+          id: uid,
+          uid: uid,
+          email: data.email || fbUser?.email || '',
+          displayName: data.displayName || fbUser?.displayName || 'Utilisateur',
+          photoURL: data.photoURL ?? fbUser?.photoURL ?? null,
+          groupId: data.groupId ?? null,
+          fcmToken: data.fcmToken ?? null,
+          createdAt: data.createdAt || new Date().toISOString(),
+          updatedAt: data.updatedAt,
+          isSuperAdmin: data.isSuperAdmin ?? false,
+          status: data.status || 'active',
+          suspendedReason: data.suspendedReason || null,
+          suspendedAt: data.suspendedAt || null,
+        };
+      }
+    } catch (e) {
+      console.warn('Error fetching user profile:', e);
+    }
+    return null;
   },
 
   async updateFcmToken(uid: string, token: string): Promise<void> {

@@ -3,6 +3,8 @@ import { View, StyleSheet } from 'react-native';
 import { Portal, Dialog, Button, Text } from 'react-native-paper';
 import { useNotificationPreferences } from '../../store/useNotificationPreferences';
 import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
+import { useAuthStore } from '../../store/useAuthStore';
+import { useGroupStore } from '../../store/useGroupStore';
 import { soundService } from '../../services/soundService';
 
 export const NotificationStartupModal: React.FC = () => {
@@ -10,18 +12,25 @@ export const NotificationStartupModal: React.FC = () => {
     useNotificationPreferences();
   const { isDark } = useThemeStore();
   const tokens = getLiquidGlassTokens(isDark);
+  const user = useAuthStore((s) => s.user);
+  const group = useGroupStore((s) => s.group);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    // Show only once if not prompted yet
+    // Only prompt once the user is authenticated and part of a flatshare
+    if (!user || !group) {
+      setVisible(false);
+      return;
+    }
+
     const timer = setTimeout(() => {
-      if (!hasPromptedStartup) {
+      if (!hasPromptedStartup && user && group) {
         setVisible(true);
       }
     }, 1200);
 
     return () => clearTimeout(timer);
-  }, [hasPromptedStartup]);
+  }, [hasPromptedStartup, user, group]);
 
   const handleEnable = async () => {
     soundService.playPopSound();
@@ -37,7 +46,7 @@ export const NotificationStartupModal: React.FC = () => {
     setVisible(false);
   };
 
-  if (!visible) return null;
+  if (!user || !group || !visible) return null;
 
   return (
     <Portal>

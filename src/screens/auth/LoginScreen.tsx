@@ -86,7 +86,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
             ColocManager
           </Text>
           <Text variant="bodyMedium" style={[styles.subtitle, { color: tokens.textSecondary }]}>
-            Gestion fluide & équitable de la colocation
+            {t('loginSubtitle')}
           </Text>
         </View>
 
@@ -101,7 +101,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
           ]}
         >
           <TextInput
-            label="Adresse e-mail"
+            label={t('emailLabel')}
             value={email}
             onChangeText={setEmail}
             mode="outlined"
@@ -116,7 +116,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
           />
 
           <TextInput
-            label="Mot de passe"
+            label={t('passwordLabel')}
             value={password}
             onChangeText={setPassword}
             mode="outlined"
@@ -142,7 +142,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
             disabled={loading}
           >
             <Text variant="bodySmall" style={{ color: tokens.primary, fontWeight: '600' }}>
-              Mot de passe oublié ?
+              {t('forgotPasswordTitle')}
             </Text>
           </TouchableOpacity>
 
@@ -158,20 +158,20 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
             contentStyle={styles.buttonContent}
             labelStyle={{ fontWeight: '800', fontSize: 15 }}
           >
-            Se connecter
+            {t('loginBtn')}
           </Button>
 
           {/* Register Link */}
           <View style={styles.footer}>
             <Text variant="bodyMedium" style={{ color: tokens.textSecondary }}>
-              Nouveau ici ?{' '}
+              {t('newHere')}
             </Text>
             <TouchableOpacity
               onPress={() => navigation.navigate('Register')}
               disabled={loading}
             >
               <Text variant="bodyMedium" style={{ color: tokens.primary, fontWeight: '800' }}>
-                Créer un compte
+                {t('registerTitle')}
               </Text>
             </TouchableOpacity>
           </View>

@@ -15,6 +15,7 @@ import { db } from '../../firebase.config';
 import { Product, PurchaseRecord } from '../types';
 import { isDemoMode, mockStorage } from './mockStorage';
 import { notificationService } from './notificationService';
+import { getNextTurnIndex } from '../utils/rotation';
 
 const shoppingSubscribers = new Set<(products: Product[]) => void>();
 
@@ -147,9 +148,10 @@ export const shoppingService = {
     if (isDemoMode()) {
       const products = await mockStorage.getProducts();
       const p = products.find((x) => x.id === productId || x.productId === productId);
-      if (p && p.rotationOrder.length > 0) {
-        const nextTurnIndex = (p.currentTurnIndex + 1) % p.rotationOrder.length;
-        const nextBuyerUid = p.rotationOrder[nextTurnIndex];
+      if (p) {
+        const rotationLen = p.rotationOrder?.length || 0;
+        const nextTurnIndex = getNextTurnIndex(p.currentTurnIndex ?? 0, rotationLen);
+        const nextBuyerUid = rotationLen > 0 ? p.rotationOrder[nextTurnIndex] : '';
         p.currentTurnIndex = nextTurnIndex;
         p.lastPurchasedAt = new Date().toISOString();
         p.lastPurchasedBy = buyerUid;
@@ -177,8 +179,9 @@ export const shoppingService = {
       if (!productSnap.exists()) throw new Error('Produit non trouvé');
 
       const product = productSnap.data() as Product;
-      const nextTurnIndex = (product.currentTurnIndex + 1) % product.rotationOrder.length;
-      const nextBuyerUid = product.rotationOrder[nextTurnIndex];
+      const rotationLen = product.rotationOrder?.length || 0;
+      const nextTurnIndex = getNextTurnIndex(product.currentTurnIndex ?? 0, rotationLen);
+      const nextBuyerUid = rotationLen > 0 ? product.rotationOrder[nextTurnIndex] : '';
       const now = new Date().toISOString();
 
       await updateDoc(productRef, {

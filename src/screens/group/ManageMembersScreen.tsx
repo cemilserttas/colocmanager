@@ -99,7 +99,7 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
     try {
       await regenerateInviteCode();
       soundService.playSuccessSound();
-      setSnackbarMessage(t('codeCopied'));
+      setSnackbarMessage(t('codeRegenerated'));
       setSnackbarVisible(true);
     } catch (err: unknown) {
       const message =
@@ -242,7 +242,7 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
             textColor={tokens.primary}
             labelStyle={{ fontSize: 16 }}
           >
-            ← {t('home')}
+            ← {t('back')}
           </Button>
           <Text variant="titleMedium" style={[styles.headerTitle, { color: tokens.text }]}>
             {t('membersTitle')}

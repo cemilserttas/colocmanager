@@ -230,9 +230,17 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
 
   if (!product) {
     return (
-      <View style={styles.notFoundContainer}>
-        <Text variant="titleMedium">Produit introuvable.</Text>
-        <Button mode="contained" onPress={() => navigation.goBack()} style={{ marginTop: spacing.md }}>
+      <View style={[styles.notFoundContainer, { backgroundColor: tokens.bg }]}>
+        <Text variant="titleMedium" style={{ color: tokens.text, fontWeight: '700' }}>
+          Produit introuvable.
+        </Text>
+        <Button
+          mode="contained"
+          buttonColor={tokens.primary}
+          textColor="#FFFFFF"
+          onPress={() => navigation.goBack()}
+          style={{ marginTop: spacing.md, borderRadius: 16 }}
+        >
           Retour à la liste
         </Button>
       </View>
@@ -240,7 +248,10 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
   }
 
   const rotationList = product.rotationOrder || [];
-  const currentTurnIndex = product.currentTurnIndex % (rotationList.length || 1);
+  const currentTurnIndex =
+    rotationList.length > 0
+      ? ((product.currentTurnIndex % rotationList.length) + rotationList.length) % rotationList.length
+      : 0;
 
   return (
     <View style={[styles.container, { backgroundColor: tokens.bg }]}>

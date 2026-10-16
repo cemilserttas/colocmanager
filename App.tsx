@@ -11,7 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { paperTheme } from './src/constants/theme';
+import { paperLightTheme, paperDarkTheme } from './src/constants/theme';
 import AppNavigator from './src/navigation/AppNavigator';
 import { notificationService } from './src/services/notificationService';
 import { useThemeStore } from './src/store/useThemeStore';
@@ -61,7 +61,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <PaperProvider theme={paperTheme}>
+      <PaperProvider theme={isDark ? paperDarkTheme : paperLightTheme}>
         <NavigationContainer>
           <StatusBar style={isDark ? 'light' : 'dark'} />
           <AppNavigator />

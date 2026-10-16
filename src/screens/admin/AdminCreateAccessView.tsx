@@ -93,7 +93,7 @@ export const AdminCreateAccessView: React.FC<AdminCreateAccessViewProps> = ({
   const handleCopyAccessCard = async () => {
     if (!createdSummary) return;
     soundService.playPopSound();
-    const text = `🎉 Bienvenue sur ColocManager !\n\nVoici vos accès direct :\n📧 Email : ${createdSummary.user.email}\n🔑 Mot de passe : ${createdSummary.rawPass}\n🌐 Accès : https://colocmanager-30703.firebaseapp.com\n\nConnectez-vous dès maintenant !`;
+    const text = `🎉 Bienvenue sur ColocManager !\n\nVoici vos accès direct :\n📧 Email : ${createdSummary.user.email}\n🔑 Mot de passe : ${createdSummary.rawPass}\n🌐 Accès : https://colocmanager.vercel.app/\n\nConnectez-vous dès maintenant !`;
     await Clipboard.setStringAsync(text);
   };
 

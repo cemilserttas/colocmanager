@@ -15,6 +15,7 @@ import { db } from '../../firebase.config';
 import { CleaningTask, CleaningRecord, CleaningFrequency } from '../types';
 import { isDemoMode, mockStorage } from './mockStorage';
 import { notificationService } from './notificationService';
+import { getNextTurnIndex } from '../utils/rotation';
 
 const cleaningSubscribers = new Set<(tasks: CleaningTask[]) => void>();
 
@@ -281,10 +282,11 @@ export const cleaningService = {
     if (isDemoMode()) {
       const tasks = await mockStorage.getCleaning();
       const t = tasks.find((x) => x.id === taskId || x.taskId === taskId);
-      if (t && t.rotationOrder.length > 0) {
-        const nextTurnIndex = (t.currentTurnIndex + 1) % t.rotationOrder.length;
+      if (t) {
+        const rotationLen = t.rotationOrder?.length || 0;
+        const nextTurnIndex = getNextTurnIndex(t.currentTurnIndex ?? 0, rotationLen);
         const nextDueDate = calculateNextDueDate(t.frequency, t.nextDueDate).toISOString();
-        const nextCleanerUid = t.rotationOrder[nextTurnIndex];
+        const nextCleanerUid = rotationLen > 0 ? t.rotationOrder[nextTurnIndex] : '';
         t.currentTurnIndex = nextTurnIndex;
         t.lastCleanedAt = new Date().toISOString();
         t.lastCleanedBy = cleanerUid;
@@ -313,9 +315,10 @@ export const cleaningService = {
       if (!taskSnap.exists()) throw new Error('Tâche non trouvée');
 
       const task = taskSnap.data() as CleaningTask;
-      const nextTurnIndex = (task.currentTurnIndex + 1) % task.rotationOrder.length;
+      const rotationLen = task.rotationOrder?.length || 0;
+      const nextTurnIndex = getNextTurnIndex(task.currentTurnIndex ?? 0, rotationLen);
       const nextDueDate = calculateNextDueDate(task.frequency, task.nextDueDate);
-      const nextCleanerUid = task.rotationOrder[nextTurnIndex];
+      const nextCleanerUid = rotationLen > 0 ? task.rotationOrder[nextTurnIndex] : '';
       const now = new Date().toISOString();
 
       await updateDoc(taskRef, {

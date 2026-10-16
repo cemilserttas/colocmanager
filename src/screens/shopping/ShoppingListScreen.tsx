@@ -215,25 +215,12 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
         {/* Admin Action Bar */}
         {isAdmin && (
           <View style={[styles.adminBar, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-            <View style={{ flex: 1, paddingRight: spacing.sm }}>
+            <View style={{ flex: 1 }}>
               <Text style={[styles.adminBarTitle, { color: tokens.accent }]}>👑 Administration Achats</Text>
               <Text style={[styles.adminBarSub, { color: tokens.textSecondary }]}>
-                Ajoutez des produits et gérez l'ordre de passage.
+                Gérez les produits partagés et l'ordre de passage des colocataires.
               </Text>
             </View>
-            <Button
-              mode="contained"
-              buttonColor={tokens.accent}
-              compact
-              style={styles.addBtnTop}
-              labelStyle={{ fontSize: 12, fontWeight: '700' }}
-              onPress={() => {
-                soundService.playPopSound();
-                navigation.navigate('AddProduct');
-              }}
-            >
-              {t('newProduct') || '+ Produit'}
-            </Button>
           </View>
         )}
 
@@ -291,7 +278,7 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
         <FAB
           icon="plus"
           label={t('newProduct') || 'Ajouter'}
-          style={[styles.fab, { backgroundColor: tokens.accent, bottom: 92 + insets.bottom }]}
+          style={[styles.fab, { backgroundColor: tokens.accent, bottom: 104 + insets.bottom }]}
           color="#FFFFFF"
           onPress={() => {
             soundService.playPopSound();

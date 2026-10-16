@@ -39,7 +39,7 @@ export const JoinCreateGroupScreen: React.FC<JoinCreateGroupScreenProps> = ({ na
   const tokens = getLiquidGlassTokens(isDark);
   const { t } = useLanguageStore();
 
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { createGroup, joinGroup, loading, error: groupError } = useGroup();
 
   const [activeMode, setActiveMode] = useState<Mode>('idle');
@@ -268,6 +268,37 @@ export const JoinCreateGroupScreen: React.FC<JoinCreateGroupScreenProps> = ({ na
             </View>
           )}
         </TouchableOpacity>
+
+        {/* Direct Super-Admin Portal Access Button */}
+        {user?.isSuperAdmin && (
+          <Button
+            mode="contained-tonal"
+            buttonColor={isDark ? 'rgba(255, 214, 10, 0.2)' : 'rgba(255, 214, 10, 0.25)'}
+            textColor={tokens.adminGold}
+            onPress={() => {
+              soundService.playPopSound();
+              navigation.navigate('AdminPortal');
+            }}
+            style={{ marginTop: 20, borderRadius: 16 }}
+            labelStyle={{ fontWeight: '800' }}
+          >
+            🛡️ Accéder au Panneau Super-Administrateur
+          </Button>
+        )}
+
+        {/* Explicit Logout Button */}
+        <Button
+          mode="text"
+          textColor={tokens.error}
+          onPress={async () => {
+            soundService.playPopSound();
+            await logout();
+          }}
+          style={{ marginTop: 12 }}
+          labelStyle={{ fontWeight: '700' }}
+        >
+          🚪 {t('logout') || 'Déconnexion'}
+        </Button>
 
         {loading && (
           <ActivityIndicator

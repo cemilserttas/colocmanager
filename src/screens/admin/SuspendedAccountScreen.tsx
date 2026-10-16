@@ -13,6 +13,8 @@ import {
   ActivityIndicator,
 } from 'react-native-paper';
 import { useAuth } from '../../hooks/useAuth';
+import { useAuthStore } from '../../store/useAuthStore';
+import { authService } from '../../services/authService';
 import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
 import { soundService } from '../../services/soundService';
 
@@ -31,15 +33,25 @@ export const SuspendedAccountScreen: React.FC = () => {
   const handleRefresh = async () => {
     soundService.playPopSound();
     setRefreshing(true);
-    // Reload page or re-check
-    setTimeout(() => {
-      setRefreshing(false);
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        window.location.reload();
-      } else {
-        setSnackbarMessage("Votre compte est toujours en attente de réactivation par l'administrateur.");
+    try {
+      if (user?.uid) {
+        const freshUser = await authService.getUserProfile(user.uid);
+        if (freshUser) {
+          useAuthStore.getState().setUser(freshUser);
+          if (freshUser.status !== 'suspended') {
+            soundService.playSuccessSound();
+            setSnackbarMessage('Votre compte a été réactivé ! Redirection...');
+            setRefreshing(false);
+            return;
+          }
+        }
       }
-    }, 1200);
+      setSnackbarMessage("Votre compte est toujours en attente de réactivation par l'administrateur.");
+    } catch {
+      setSnackbarMessage('Impossible de vérifier le statut. Veuillez réessayer.');
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleContactSupport = () => {

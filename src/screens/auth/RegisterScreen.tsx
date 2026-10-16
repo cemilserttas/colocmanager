@@ -16,6 +16,7 @@ import {
 } from 'react-native-paper';
 import { useAuth } from '../../hooks/useAuth';
 import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
+import { useLanguageStore } from '../../store/useLanguageStore';
 import { soundService } from '../../services/soundService';
 
 interface RegisterScreenProps {
@@ -31,6 +32,7 @@ interface RegisterScreenProps {
 export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
   const { isDark } = useThemeStore();
   const tokens = getLiquidGlassTokens(isDark);
+  const { t } = useLanguageStore();
   const { register, loading, error: authError, clearError } = useAuth();
 
   const [displayName, setDisplayName] = useState('');
@@ -129,10 +131,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
             <Text style={{ fontSize: 36 }}>✨</Text>
           </View>
           <Text variant="headlineMedium" style={[styles.screenTitle, { color: tokens.text }]}>
-            Créer un compte
+            {t('registerTitle')}
           </Text>
           <Text variant="bodyMedium" style={[styles.subtitle, { color: tokens.textSecondary }]}>
-            Rejoignez ou créez une colocation en quelques secondes
+            {t('registerSubtitle')}
           </Text>
         </View>
 
@@ -147,7 +149,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
           ]}
         >
           <TextInput
-            label="Nom ou Pseudo"
+            label={t('nameLabel')}
             value={displayName}
             onChangeText={setDisplayName}
             mode="outlined"
@@ -161,7 +163,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
           />
 
           <TextInput
-            label="Adresse e-mail"
+            label={t('emailLabel')}
             value={email}
             onChangeText={setEmail}
             mode="outlined"
@@ -177,7 +179,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
           />
 
           <TextInput
-            label="Mot de passe"
+            label={t('passwordLabel')}
             value={password}
             onChangeText={setPassword}
             mode="outlined"
@@ -198,7 +200,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
           />
 
           <TextInput
-            label="Confirmer le mot de passe"
+            label={t('confirmPasswordLabel')}
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             mode="outlined"
@@ -230,13 +232,13 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
             contentStyle={styles.buttonContent}
             labelStyle={{ fontWeight: '800', fontSize: 15 }}
           >
-            S'inscrire
+            {t('registerBtn')}
           </Button>
 
           {/* Back to Login Link */}
           <View style={styles.footer}>
             <Text variant="bodyMedium" style={{ color: tokens.textSecondary }}>
-              Vous avez déjà un compte ?{' '}
+              {t('alreadyHaveAccount')}
             </Text>
             <TouchableOpacity
               onPress={() => {
@@ -246,7 +248,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
               disabled={loading}
             >
               <Text variant="bodyMedium" style={{ color: tokens.primary, fontWeight: '800' }}>
-                Se connecter
+                {t('loginBtn')}
               </Text>
             </TouchableOpacity>
           </View>

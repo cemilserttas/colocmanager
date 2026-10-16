@@ -271,25 +271,12 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
         {/* Admin Action Bar */}
         {isAdmin && (
           <View style={[styles.adminBar, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-            <View style={{ flex: 1, paddingRight: spacing.sm }}>
+            <View style={{ flex: 1 }}>
               <Text style={[styles.adminBarTitle, { color: '#0284C7' }]}>👑 Administration Nettoyage</Text>
               <Text style={[styles.adminBarSub, { color: tokens.textSecondary }]}>
                 Créez des corvées récurrentes et gérez les attributions.
               </Text>
             </View>
-            <Button
-              mode="contained"
-              buttonColor="#0284C7"
-              compact
-              style={styles.addBtnTop}
-              labelStyle={{ fontSize: 12, fontWeight: '700' }}
-              onPress={() => {
-                soundService.playPopSound();
-                navigation.navigate('AddCleaningTask');
-              }}
-            >
-              {t('newChore') || '+ Ménage'}
-            </Button>
           </View>
         )}
 
@@ -347,7 +334,7 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
         <FAB
           icon="plus"
           label={t('newChore') || 'Nouvelle tâche'}
-          style={[styles.fab, { backgroundColor: '#0284C7', bottom: 92 + insets.bottom }]}
+          style={[styles.fab, { backgroundColor: '#0284C7', bottom: 104 + insets.bottom }]}
           color="#FFFFFF"
           onPress={() => {
             soundService.playPopSound();
