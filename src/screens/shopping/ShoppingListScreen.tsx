@@ -35,11 +35,11 @@ const getMemberName = (uid: string, members: GroupMember[]): string => {
 /**
  * Formats ISO date string to localized readable format.
  */
-const formatDate = (dateValue?: string | Date | null): string => {
-  if (!dateValue) return 'Aucun';
+const formatDate = (dateValue?: string | Date | null, isEnglish: boolean = false): string => {
+  if (!dateValue) return isEnglish ? 'None' : 'Aucun';
   try {
     const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
-    return date.toLocaleDateString('fr-FR', {
+    return date.toLocaleDateString(isEnglish ? 'en-US' : 'fr-FR', {
       day: 'numeric',
       month: 'short',
     });
@@ -62,7 +62,8 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
   const insets = useSafeAreaInsets();
   const { isDark } = useThemeStore();
   const tokens = getLiquidGlassTokens(isDark);
-  const { t } = useLanguageStore();
+  const { t, language } = useLanguageStore();
+  const isEn = language === 'en';
 
   const { user } = useAuth();
   const { group, members } = useGroup();
@@ -107,11 +108,16 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
     try {
       await markAsPurchased(productId);
       soundService.playPurchaseSound();
-      setSnackbarMessage(`✓ Achat validé pour "${productName}" ! Le tour passe au colocataire suivant.`);
+      setSnackbarMessage(
+        t('purchaseSuccess', { name: productName }) ||
+          `✓ Achat validé pour "${productName}" ! Le tour passe au colocataire suivant.`
+      );
       setSnackbarVisible(true);
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : "Erreur lors de l'enregistrement de l'achat.";
+        err instanceof Error
+          ? err.message
+          : t('purchaseError') || "Erreur lors de l'enregistrement de l'achat.";
       setSnackbarMessage(message);
       setSnackbarVisible(true);
     } finally {
@@ -134,7 +140,7 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
       ? isMyTurn
         ? (t('yourTurn') || 'À toi !')
         : getMemberName(currentBuyerUid, members)
-      : 'Personne';
+      : (t('nobody') || 'Personne');
 
     const lastBuyerName = item.lastPurchasedBy
       ? getMemberName(item.lastPurchasedBy, members)
@@ -169,11 +175,20 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
               <Text variant="titleMedium" style={[styles.productName, { color: tokens.text }]}>
                 {item.name}
               </Text>
+              {item.comment ? (
+                <Text
+                  variant="bodySmall"
+                  style={{ color: tokens.accent, marginTop: 1, fontStyle: 'italic' }}
+                  numberOfLines={2}
+                >
+                  💬 {item.comment}
+                </Text>
+              ) : null}
               <Text
                 variant="bodyMedium"
                 style={[styles.turnText, { color: isMyTurn ? '#10B981' : tokens.textSecondary }]}
               >
-                Tour :{' '}
+                {t('turnLabel') || 'Tour :'}{' '}
                 <Text style={{ fontWeight: '800', color: isMyTurn ? '#10B981' : tokens.text }}>
                   {currentBuyerName} {isMyTurn ? '👈' : ''}
                 </Text>
@@ -200,8 +215,8 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
             <Text variant="bodySmall" style={[styles.lastPurchaseText, { color: tokens.textSecondary }]}>
               🕒 {t('lastPurchase') || 'Dernier achat :'}{' '}
               {item.lastPurchasedAt
-                ? `${formatDate(item.lastPurchasedAt)}${lastBuyerName ? ` par ${lastBuyerName}` : ''}`
-                : 'Aucun enregistrement'}
+                ? `${formatDate(item.lastPurchasedAt, isEn)}${lastBuyerName ? ` ${t('by') || 'par'} ${lastBuyerName}` : ''}`
+                : (t('noPurchaseRecord') || 'Aucun enregistrement')}
             </Text>
           </View>
         </View>
@@ -216,9 +231,9 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
         {isAdmin && (
           <View style={[styles.adminBar, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.adminBarTitle, { color: tokens.accent }]}>👑 Administration Achats</Text>
+              <Text style={[styles.adminBarTitle, { color: tokens.accent }]}>{t('adminShoppingTitle')}</Text>
               <Text style={[styles.adminBarSub, { color: tokens.textSecondary }]}>
-                Gérez les produits partagés et l'ordre de passage des colocataires.
+                {t('adminShoppingSub')}
               </Text>
             </View>
           </View>
@@ -264,7 +279,7 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
                       navigation.navigate('AddProduct');
                     }}
                   >
-                    {t('newProduct') || '+ Ajouter un produit'}
+                    + {t('product')}
                   </Button>
                 )}
               </View>
@@ -277,7 +292,7 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
       {isAdmin && (
         <FAB
           icon="plus"
-          label={t('newProduct') || 'Ajouter'}
+          label={t('product') || 'Produit'}
           style={[styles.fab, { backgroundColor: tokens.accent, bottom: 104 + insets.bottom }]}
           color="#FFFFFF"
           onPress={() => {

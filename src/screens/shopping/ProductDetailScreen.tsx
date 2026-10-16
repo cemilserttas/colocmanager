@@ -213,17 +213,17 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
     if (!product) return;
     try {
       await notificationService.sendPeerReminder(
-        user?.displayName || 'Un colocataire',
+        user?.displayName || t('roommate'),
         targetUid,
         'shopping',
         product.name,
         product.id
       );
       soundService.playSuccessSound();
-      setSnackbarMessage(`✓ Rappel envoyé à ${targetName} dans Firebase !`);
+      setSnackbarMessage(t('reminderSent', { name: targetName }) || `✓ Rappel envoyé à ${targetName} !`);
       setSnackbarVisible(true);
     } catch {
-      setSnackbarMessage("Erreur lors de l'envoi du rappel.");
+      setSnackbarMessage(t('reminderError') || "Erreur lors de l'envoi du rappel.");
       setSnackbarVisible(true);
     }
   };
@@ -232,7 +232,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
     return (
       <View style={[styles.notFoundContainer, { backgroundColor: tokens.bg }]}>
         <Text variant="titleMedium" style={{ color: tokens.text, fontWeight: '700' }}>
-          Produit introuvable.
+          {t('productNotFound')}
         </Text>
         <Button
           mode="contained"
@@ -241,7 +241,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
           onPress={() => navigation.goBack()}
           style={{ marginTop: spacing.md, borderRadius: 16 }}
         >
-          Retour à la liste
+          {t('backToList')}
         </Button>
       </View>
     );
@@ -276,7 +276,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
             style={{ margin: 0 }}
             labelStyle={{ fontSize: 16, color: tokens.accent, fontWeight: '700' }}
           >
-            ← Retour
+            ← {t('back')}
           </Button>
           <Text variant="titleMedium" style={[styles.screenTitle, { color: tokens.text }]} numberOfLines={1}>
             {product.name}
@@ -296,19 +296,24 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
             <Text variant="headlineSmall" style={[styles.bannerName, { color: tokens.text }]}>
               {product.name}
             </Text>
+            {product.comment ? (
+              <Text variant="bodySmall" style={{ color: tokens.textSecondary, marginBottom: 8, fontStyle: 'italic', textAlign: 'center' }}>
+                💬 {product.comment}
+              </Text>
+            ) : null}
             <Chip style={[styles.rotationChip, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.16)' : '#ECFDF5' }]} textStyle={{ color: '#10B981', fontWeight: '700' }}>
-              🔄 {rotationList.length} colocataires en rotation
+              🔄 {rotationList.length} {t('members').toLowerCase()}
             </Chip>
           </View>
 
           {/* Rotation Order Section */}
           <View style={styles.sectionHeaderRow}>
             <Text variant="titleMedium" style={[styles.sectionTitle, { color: tokens.text }]}>
-              Ordre de passage
+              {t('turnOrder')}
             </Text>
             {isAdmin && (
               <Button mode="text" onPress={handleOpenReorder} textColor={tokens.accent} style={styles.editButton}>
-                Modifier l'ordre
+                {t('modifyOrder')}
               </Button>
             )}
           </View>
@@ -360,7 +365,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
                       </Text>
                       {isCurrent && (
                         <Text variant="labelSmall" style={styles.currentTurnBadge}>
-                          ★ C'est son tour d'acheter !
+                          {t('theirTurnToBuy')}
                         </Text>
                       )}
                     </View>
@@ -377,7 +382,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
                         ]}
                       >
                         <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#10B981' }}>
-                          🔔 Rappeler
+                          {t('remindBtn')}
                         </Text>
                       </TouchableOpacity>
                     )}
@@ -391,7 +396,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
           {/* Purchase History Section */}
           <View style={styles.sectionHeaderRow}>
             <Text variant="titleMedium" style={[styles.sectionTitle, { color: tokens.text }]}>
-              Historique des achats
+              {t('purchaseHistory')}
             </Text>
           </View>
 
@@ -402,10 +407,11 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
               <View style={styles.emptyHistory}>
                 <Text variant="bodyMedium" style={[styles.emptyHistoryText, { color: tokens.textSecondary }]}>
                   {product.lastPurchasedAt
-                    ? `Dernier achat enregistré le ${formatDate(product.lastPurchasedAt)} par ${
-                        product.lastPurchasedBy ? getMemberName(product.lastPurchasedBy, members) : 'un coloc'
-                      }.`
-                    : 'Aucun achat validé pour le moment.'}
+                    ? t('lastPurchaseRecorded', {
+                        date: formatDate(product.lastPurchasedAt),
+                        name: product.lastPurchasedBy ? getMemberName(product.lastPurchasedBy, members) : t('roommate'),
+                      })
+                    : t('noPurchasesYet')}
                 </Text>
               </View>
             ) : (
@@ -415,7 +421,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
                     <Text style={{ fontSize: 20, marginRight: spacing.sm }}>✅</Text>
                     <View style={styles.historyDetails}>
                       <Text variant="bodyMedium" style={[styles.historyBuyer, { color: tokens.text }]}>
-                        Acheté par {getMemberName(record.buyerUid, members)}
+                        {t('boughtBy', { name: getMemberName(record.buyerUid, members) })}
                       </Text>
                       <Text variant="bodySmall" style={[styles.historyDate, { color: tokens.textSecondary }]}>
                         {formatDate(record.purchasedAt)}
@@ -439,7 +445,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
                 setDeleteDialogVisible(true);
               }}
             >
-              🗑️ Supprimer ce produit
+              {t('deleteProduct')}
             </Button>
           )}
         </ScrollView>
@@ -452,10 +458,10 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
           onDismiss={() => setReorderDialogVisible(false)}
           style={{ backgroundColor: tokens.card, borderRadius: 24, borderWidth: 1, borderColor: tokens.border }}
         >
-          <Dialog.Title style={{ color: tokens.text, fontWeight: '800' }}>Modifier l'ordre de passage</Dialog.Title>
+          <Dialog.Title style={{ color: tokens.text, fontWeight: '800' }}>{t('modifyOrderTitle')}</Dialog.Title>
           <Dialog.Content>
             <Text variant="bodySmall" style={[styles.dialogDescription, { color: tokens.textSecondary }]}>
-              Utilisez les boutons monter / descendre pour réorganiser l'ordre d'achat :
+              {t('modifyOrderSub')}
             </Text>
             <ScrollView style={styles.dialogList}>
               {tempOrder.map((uid, idx) => {
@@ -494,7 +500,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
             </ScrollView>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setReorderDialogVisible(false)} textColor={tokens.textSecondary}>Annuler</Button>
+            <Button onPress={() => setReorderDialogVisible(false)} textColor={tokens.textSecondary}>{t('cancel')}</Button>
             <Button
               mode="contained"
               buttonColor={tokens.accent}
@@ -502,7 +508,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
               loading={savingOrder}
               style={{ borderRadius: 16 }}
             >
-              Enregistrer
+              {t('save')}
             </Button>
           </Dialog.Actions>
         </Dialog>
@@ -513,20 +519,20 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
           onDismiss={() => setDeleteDialogVisible(false)}
           style={{ backgroundColor: tokens.card, borderRadius: 24, borderWidth: 1, borderColor: tokens.border }}
         >
-          <Dialog.Title style={{ color: tokens.text, fontWeight: '800' }}>Supprimer le produit</Dialog.Title>
+          <Dialog.Title style={{ color: tokens.text, fontWeight: '800' }}>{t('deleteProductTitle')}</Dialog.Title>
           <Dialog.Content>
             <Text variant="bodyMedium" style={{ color: tokens.textSecondary }}>
-              Voulez-vous vraiment supprimer définitivement "{product.name}" de la colocation ?
+              {t('deleteProductConfirm', { name: product.name })}
             </Text>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setDeleteDialogVisible(false)} textColor={tokens.textSecondary}>Annuler</Button>
+            <Button onPress={() => setDeleteDialogVisible(false)} textColor={tokens.textSecondary}>{t('cancel')}</Button>
             <Button
               textColor="#EF4444"
               onPress={handleDeleteProduct}
               loading={deleting}
             >
-              Supprimer
+              {t('delete')}
             </Button>
           </Dialog.Actions>
         </Dialog>

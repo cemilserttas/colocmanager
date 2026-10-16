@@ -4,6 +4,7 @@ import {
   signOut as firebaseSignOut,
   sendPasswordResetEmail,
   updateProfile,
+  updatePassword,
   onAuthStateChanged as firebaseOnAuthStateChanged,
   User as FirebaseUser,
 } from 'firebase/auth';
@@ -49,6 +50,8 @@ export function formatAuthError(error: any): string {
       return 'Trop de tentatives échouées. Veuillez réessayer dans quelques instants.';
     case 'auth/user-disabled':
       return 'Ce compte a été suspendu.';
+    case 'auth/requires-recent-login':
+      return 'Cette opération est sensible. Veuillez vous reconnecter avant de changer votre mot de passe.';
     default:
       return error?.message || 'Une erreur est survenue lors de la connexion.';
   }
@@ -219,6 +222,21 @@ export const authService = {
       await sendPasswordResetEmail(auth, email.trim().toLowerCase());
     } catch (error: any) {
       console.error('Error during resetPassword in authService:', error);
+      throw new Error(formatAuthError(error));
+    }
+  },
+
+  async updateCurrentUserPassword(newPassword: string): Promise<void> {
+    if (isDemoMode()) {
+      return;
+    }
+    if (!auth.currentUser) {
+      throw new Error('Utilisateur non connecté.');
+    }
+    try {
+      await updatePassword(auth.currentUser, newPassword);
+    } catch (error: any) {
+      console.error('Error during updatePassword in authService:', error);
       throw new Error(formatAuthError(error));
     }
   },

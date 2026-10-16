@@ -1,6 +1,13 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import * as Notifications from 'expo-notifications';
 import { useAuthStore } from '../store/useAuthStore';
+import { useNotificationPreferences } from '../store/useNotificationPreferences';
+import { useLanguageStore } from '../store/useLanguageStore';
 import { notificationService } from '../services/notificationService';
+import {
+  translateNotificationTitle,
+  translateNotificationBody,
+} from '../utils/notificationTranslation';
 import { AppNotification } from '../types';
 
 /**
@@ -18,6 +25,8 @@ export function useNotifications() {
   const [error, setError] = useState<string | null>(null);
 
   const isConfiguredRef = useRef<boolean>(false);
+  const seenNotifIdsRef = useRef<Set<string>>(new Set());
+  const initialLoadDoneRef = useRef<boolean>(false);
 
   /**
    * Requests push notification permissions and saves the Expo push token
@@ -139,6 +148,8 @@ export function useNotifications() {
   useEffect(() => {
     if (!user?.uid) {
       setNotifications([]);
+      seenNotifIdsRef.current.clear();
+      initialLoadDoneRef.current = false;
       return;
     }
 
@@ -146,6 +157,81 @@ export function useNotifications() {
       user.uid,
       (newNotifs) => {
         setNotifications(newNotifs);
+
+        if (!initialLoadDoneRef.current) {
+          // Record current notification ids so initial loading doesn't spam previous alerts
+          newNotifs.forEach((n) => seenNotifIdsRef.current.add(n.id));
+          initialLoadDoneRef.current = true;
+          return;
+        }
+
+        const prefs = useNotificationPreferences.getState();
+        if (!prefs.notificationsEnabled) {
+          newNotifs.forEach((n) => seenNotifIdsRef.current.add(n.id));
+          return;
+        }
+
+        newNotifs.forEach((notif) => {
+          if (!notif.isRead && !seenNotifIdsRef.current.has(notif.id)) {
+            seenNotifIdsRef.current.add(notif.id);
+
+            let isAllowed = true;
+            const titleLower = (notif.title || '').toLowerCase();
+            const bodyLower = (notif.body || '').toLowerCase();
+            const isShopping =
+              notif.type === 'shopping' ||
+              notif.type === 'purchase_turn' ||
+              (notif.type === 'reminder' &&
+                (titleLower.includes('achat') ||
+                  bodyLower.includes('achat') ||
+                  bodyLower.includes('acheter') ||
+                  bodyLower.includes('course') ||
+                  bodyLower.includes('racheter') ||
+                  titleLower.includes('restock') ||
+                  bodyLower.includes('restock')));
+            const isCleaning =
+              notif.type === 'cleaning' ||
+              notif.type === 'cleaning_turn' ||
+              (notif.type === 'reminder' &&
+                (titleLower.includes('ménage') ||
+                  bodyLower.includes('ménage') ||
+                  bodyLower.includes('nettoy') ||
+                  bodyLower.includes('tâche') ||
+                  titleLower.includes('clean') ||
+                  bodyLower.includes('clean') ||
+                  titleLower.includes('chore')));
+            const isAdmin = notif.type === 'admin' || notif.type === 'admin_transfer';
+            const isGroup =
+              notif.type === 'group' ||
+              notif.type === 'member_joined' ||
+              notif.type === 'member_left';
+
+            if (isShopping && !prefs.shoppingReminders) {
+              isAllowed = false;
+            } else if (isCleaning && !prefs.cleaningReminders) {
+              isAllowed = false;
+            } else if (isAdmin && !prefs.adminUpdates) {
+              isAllowed = false;
+            } else if (isGroup && !prefs.groupUpdates) {
+              isAllowed = false;
+            }
+
+            if (isAllowed) {
+              const isEn = useLanguageStore.getState().language === 'en';
+              const title = translateNotificationTitle(notif.title, isEn);
+              const body = translateNotificationBody(notif.body, isEn);
+
+              Notifications.scheduleNotificationAsync({
+                content: {
+                  title,
+                  body,
+                  sound: true,
+                },
+                trigger: null,
+              }).catch((e) => console.warn('Push dispatch error:', e));
+            }
+          }
+        });
       }
     );
 

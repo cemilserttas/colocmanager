@@ -22,7 +22,8 @@ export interface ShoppingState {
     groupId: string,
     name: string,
     icon: string,
-    rotationOrder: string[]
+    rotationOrder: string[],
+    comment?: string
   ) => Promise<void>;
 
   /**
@@ -96,7 +97,8 @@ export const useShoppingStore = create<ShoppingState>((set) => ({
     groupId: string,
     name: string,
     icon: string,
-    rotationOrder: string[]
+    rotationOrder: string[],
+    comment?: string
   ) => {
     set({ isLoading: true, error: null });
     try {
@@ -104,10 +106,13 @@ export const useShoppingStore = create<ShoppingState>((set) => ({
         groupId,
         name,
         icon,
-        rotationOrder
+        rotationOrder,
+        comment
       );
       set((state) => ({
-        products: [...state.products, newProduct],
+        products: state.products.some((p) => p.id === newProduct.id)
+          ? state.products
+          : [...state.products, newProduct],
         isLoading: false,
         error: null,
       }));

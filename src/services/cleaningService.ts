@@ -451,8 +451,9 @@ export const cleaningService = {
   },
 
   subscribeToTasks(groupId: string, callback: (tasks: CleaningTask[]) => void): () => void {
+    cleaningSubscribers.add(callback);
+
     if (isDemoMode()) {
-      cleaningSubscribers.add(callback);
       mockStorage.getCleaning().then(callback);
       return () => {
         cleaningSubscribers.delete(callback);
@@ -465,10 +466,22 @@ export const cleaningService = {
       where('isActive', '==', true)
     );
 
-    return onSnapshot(q, (snapshot) => {
-      const items = snapshot.docs.map((docSnap) => docSnap.data() as CleaningTask);
-      callback(items);
-    });
+    const unsub = onSnapshot(
+      q,
+      (snapshot) => {
+        const items = snapshot.docs.map((docSnap) => docSnap.data() as CleaningTask);
+        callback(items);
+      },
+      (error) => {
+        console.warn('Realtime cleaning tasks subscription error, falling back to query:', error);
+        cleaningService.getTasks(groupId).then(callback).catch(() => {});
+      }
+    );
+
+    return () => {
+      cleaningSubscribers.delete(callback);
+      unsub();
+    };
   },
 };
 

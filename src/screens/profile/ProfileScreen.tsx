@@ -47,7 +47,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const tokens = getLiquidGlassTokens(isDark);
   const { t, erasmusMode, setErasmusMode } = useLanguageStore();
 
-  const { user, logout, updateUserProfile } = useAuth();
+  const { user, logout, updateUserProfile, updatePassword } = useAuth();
   const { group, members, leaveGroup } = useGroup();
 
   const {
@@ -64,6 +64,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   // Edit profile dialog
   const [editProfileVisible, setEditProfileVisible] = useState(false);
   const [newDisplayName, setNewDisplayName] = useState(user?.displayName || '');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [updatingProfile, setUpdatingProfile] = useState(false);
 
   // Leave group dialog
@@ -143,14 +146,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
         // Ignore
       }
 
-      setSnackbarMessage(
-        triggered
-          ? "🔔 Notifications activées ! Une alerte test vient d'apparaître sur ton écran."
-          : "🔔 Notifications activées avec succès !"
-      );
+      setSnackbarMessage(t('notificationsEnabledMsg'));
       setSnackbarVisible(true);
     } else {
-      setSnackbarMessage('Notifications désactivées.');
+      setSnackbarMessage(t('notificationsDisabledMsg'));
       setSnackbarVisible(true);
     }
   };
@@ -159,9 +158,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     soundService.playPopSound();
     await setErasmusMode(enabled);
     setSnackbarMessage(
-      enabled
-        ? '🌍 Mode Erasmus activé ! L\'application est désormais en anglais.'
-        : '🌍 Mode standard restauré en français.'
+      enabled ? t('erasmusEnabledMsg') : t('erasmusDisabledMsg')
     );
     setSnackbarVisible(true);
   };
@@ -169,23 +166,41 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const handleSaveProfile = async () => {
     const trimmed = newDisplayName.trim();
     if (!trimmed) {
-      setSnackbarMessage('Le nom ne peut pas être vide.');
+      setSnackbarMessage(t('nameEmptyError'));
       setSnackbarVisible(true);
       return;
     }
 
+    if (newPassword) {
+      if (newPassword.length < 6) {
+        setSnackbarMessage(t('passwordTooShortError'));
+        setSnackbarVisible(true);
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        setSnackbarMessage(t('passwordMismatchError'));
+        setSnackbarVisible(true);
+        return;
+      }
+    }
+
     setUpdatingProfile(true);
     try {
+      if (newPassword && updatePassword) {
+        await updatePassword(newPassword);
+      }
       if (updateUserProfile) {
         await updateUserProfile({ displayName: trimmed });
       }
       setEditProfileVisible(false);
+      setNewPassword('');
+      setConfirmPassword('');
       soundService.playSuccessSound();
-      setSnackbarMessage('Profil mis à jour avec succès !');
+      setSnackbarMessage(t('profileUpdateSuccess'));
       setSnackbarVisible(true);
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'Erreur lors de la mise à jour du profil.';
+        err instanceof Error ? err.message : t('profileUpdateError');
       setSnackbarMessage(message);
       setSnackbarVisible(true);
     } finally {
@@ -195,7 +210,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 
   const handleConfirmLeaveGroup = async () => {
     if (isAdmin && members.length > 1) {
-      setSnackbarMessage("En tant qu'administrateur, veuillez transférer votre rôle à un colocataire avant de quitter.");
+      setSnackbarMessage(t('transferAdminBeforeLeave'));
       setSnackbarVisible(true);
       setLeaveGroupVisible(false);
       return;
@@ -543,7 +558,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
               style={styles.actionListItem}
             >
               <Text style={{ fontSize: 18, marginRight: 10 }}>✏️</Text>
-              <Text style={[styles.actionListText, { color: tokens.text }]}>Modifier mon profil</Text>
+              <Text style={[styles.actionListText, { color: tokens.text }]}>{t('editProfile')}</Text>
               <Text style={{ color: tokens.textSecondary, fontSize: 18 }}>›</Text>
             </TouchableOpacity>
 
@@ -567,7 +582,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
               onPress={() => {
                 soundService.playPopSound();
                 if (isAdmin && members.length > 1) {
-                  setSnackbarMessage("En tant qu'administrateur, vous devez désigner un successeur (Céder Admin) avant de pouvoir quitter la colocation.");
+                  setSnackbarMessage(t('transferAdminBeforeLeave'));
                   setSnackbarVisible(true);
                   return;
                 }
@@ -604,13 +619,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
       <Portal>
         <Dialog
           visible={editProfileVisible}
-          onDismiss={() => setEditProfileVisible(false)}
+          onDismiss={() => {
+            setEditProfileVisible(false);
+            setNewPassword('');
+            setConfirmPassword('');
+          }}
           style={[styles.dialog, { backgroundColor: isDark ? '#141624' : '#FFFFFF', borderColor: tokens.border }]}
         >
-          <Dialog.Title style={{ color: tokens.text, fontWeight: '800' }}>Modifier mon profil</Dialog.Title>
+          <Dialog.Title style={{ color: tokens.text, fontWeight: '800' }}>{t('editProfile')}</Dialog.Title>
           <Dialog.Content>
             <TextInput
-              label="Nom ou Pseudo"
+              label={t('nameLabel')}
               value={newDisplayName}
               onChangeText={setNewDisplayName}
               mode="outlined"
@@ -618,10 +637,45 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
               textColor={tokens.text}
               disabled={updatingProfile}
             />
+            <TextInput
+              label={t('newPasswordOptional')}
+              value={newPassword}
+              onChangeText={setNewPassword}
+              secureTextEntry={!showPassword}
+              mode="outlined"
+              style={{ marginTop: 12 }}
+              textColor={tokens.text}
+              disabled={updatingProfile}
+              right={
+                <TextInput.Icon
+                  icon={showPassword ? 'eye-off' : 'eye'}
+                  onPress={() => setShowPassword(!showPassword)}
+                />
+              }
+            />
+            {newPassword.length > 0 && (
+              <TextInput
+                label={t('confirmNewPassword')}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showPassword}
+                mode="outlined"
+                style={{ marginTop: 12 }}
+                textColor={tokens.text}
+                disabled={updatingProfile}
+              />
+            )}
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setEditProfileVisible(false)} textColor={tokens.textSecondary}>
-              Annuler
+            <Button
+              onPress={() => {
+                setEditProfileVisible(false);
+                setNewPassword('');
+                setConfirmPassword('');
+              }}
+              textColor={tokens.textSecondary}
+            >
+              {t('cancel')}
             </Button>
             <Button
               mode="contained"
@@ -630,7 +684,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
               onPress={handleSaveProfile}
               loading={updatingProfile}
             >
-              Enregistrer
+              {t('save')}
             </Button>
           </Dialog.Actions>
         </Dialog>

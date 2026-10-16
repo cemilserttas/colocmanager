@@ -17,6 +17,7 @@ export type AuthStackParamList = {
 export type MainTabParamList = {
   Dashboard: undefined;
   Shopping: NavigatorScreenParams<ShoppingStackParamList>;
+  Inventory: undefined;
   Cleaning: NavigatorScreenParams<CleaningStackParamList>;
   Profile: NavigatorScreenParams<ProfileStackParamList>;
 };

@@ -5,6 +5,7 @@ import Constants from 'expo-constants';
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   setDoc,
   updateDoc,
@@ -17,6 +18,13 @@ import { db } from '../../firebase.config';
 import { AppNotification, NotificationType, Product, CleaningTask } from '../types';
 import { isDemoMode, mockStorage } from './mockStorage';
 import { getCurrentAssignee } from '../utils/rotation';
+
+const demoNotificationSubscribers = new Set<(notifications: AppNotification[]) => void>();
+
+const notifyDemoNotificationSubscribers = async (userId: string) => {
+  const notifs = await mockStorage.getNotifications(userId);
+  demoNotificationSubscribers.forEach((cb) => cb(notifs));
+};
 
 /**
  * Service managing push tokens, local scheduled notifications,
@@ -133,6 +141,43 @@ export const notificationService = {
   },
 
   /**
+   * Dispatches remote push notification via Expo Push API.
+   */
+  async sendExpoPush(
+    token: string,
+    title: string,
+    body: string,
+    data?: any
+  ): Promise<void> {
+    try {
+      if (
+        !token ||
+        typeof token !== 'string' ||
+        (!token.startsWith('ExponentPushToken') && !token.startsWith('ExpoPushToken'))
+      ) {
+        return;
+      }
+      await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Accept-encoding': 'gzip, deflate',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to: token,
+          sound: 'default',
+          title,
+          body,
+          data,
+        }),
+      });
+    } catch (e) {
+      console.warn('Expo push dispatch failed (non-fatal):', e);
+    }
+  },
+
+  /**
    * Schedules a local notification to fire after a specified number of seconds.
    *
    * @param title - Notification title
@@ -210,6 +255,7 @@ export const notificationService = {
 
     if (isDemoMode()) {
       await mockStorage.addNotification(newNotification);
+      notifyDemoNotificationSubscribers(recipientUid).catch(() => {});
       return;
     }
 
@@ -218,6 +264,22 @@ export const notificationService = {
       newNotification.id = notifRef.id;
       newNotification.notifId = notifRef.id;
       await setDoc(notifRef, newNotification);
+
+      // Dispatch remote push notification if recipient has an Expo push token
+      try {
+        const recipientUserDoc = await getDoc(doc(db, 'users', recipientUid));
+        if (recipientUserDoc.exists()) {
+          const pushToken = recipientUserDoc.data()?.fcmToken;
+          if (pushToken) {
+            await notificationService.sendExpoPush(pushToken, title, body, {
+              type,
+              referenceId,
+            });
+          }
+        }
+      } catch {
+        // Non-fatal if token lookup fails
+      }
     } catch (error: any) {
       console.warn('Firestore notification insert fallback to local storage:', error);
       await mockStorage.addNotification(newNotification);
@@ -412,6 +474,14 @@ export const notificationService = {
     userId: string,
     callback: (notifications: AppNotification[]) => void
   ): () => void {
+    if (isDemoMode()) {
+      mockStorage.getNotifications(userId).then(callback).catch(() => {});
+      demoNotificationSubscribers.add(callback);
+      return () => {
+        demoNotificationSubscribers.delete(callback);
+      };
+    }
+
     const q = query(
       collection(db, 'notifications'),
       where('recipientUid', '==', userId),

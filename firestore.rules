@@ -17,7 +17,7 @@ service cloud.firestore {
     // Users can read/write their own document; SuperAdmins can manage all
     // ==========================================
     match /users/{userId} {
-      allow read: if request.auth != null && (request.auth.uid == userId || isSuperAdmin());
+      allow read: if request.auth != null;
       allow create: if request.auth != null;
       allow update: if request.auth != null && (request.auth.uid == userId || isSuperAdmin());
       allow delete: if request.auth != null && isSuperAdmin();
@@ -59,13 +59,12 @@ service cloud.firestore {
     // Members or SuperAdmins can read/manage
     // ==========================================
     match /products/{productId} {
-      allow read: if request.auth != null && (isMemberOfProductGroup(productId) || isSuperAdmin());
+      allow read: if request.auth != null && (isMemberOfGroup(resource.data.groupId) || isSuperAdmin());
       allow create: if request.auth != null && (
-        isAdminOfProductGroup(request.resource) ||
         isMemberOfGroup(request.resource.data.groupId) ||
         isSuperAdmin()
       );
-      allow delete: if request.auth != null && (isAdminOfProductGroup(resource) || isSuperAdmin());
+      allow delete: if request.auth != null && (isAdminOfGroup(resource.data.groupId) || isSuperAdmin());
       allow update: if request.auth != null && (
         isMemberOfGroup(resource.data.groupId) ||
         isSuperAdmin()
@@ -83,10 +82,10 @@ service cloud.firestore {
     // CLEANING TASKS
     // ==========================================
     match /cleaningTasks/{taskId} {
-      allow read: if request.auth != null && (isMemberOfTaskGroup(taskId) || isSuperAdmin());
+      allow read: if request.auth != null && (isMemberOfGroup(resource.data.groupId) || isSuperAdmin());
       allow create: if request.auth != null && (isMemberOfGroup(request.resource.data.groupId) || isSuperAdmin());
-      allow delete: if request.auth != null && (isMemberOfTaskGroup(taskId) || isSuperAdmin());
-      allow update: if request.auth != null && (isMemberOfTaskGroup(taskId) || isSuperAdmin());
+      allow delete: if request.auth != null && (isAdminOfGroup(resource.data.groupId) || isSuperAdmin());
+      allow update: if request.auth != null && (isMemberOfGroup(resource.data.groupId) || isSuperAdmin());
 
       // Cleaning history subcollection
       match /history/{recordId} {

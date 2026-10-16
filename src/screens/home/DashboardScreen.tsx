@@ -34,11 +34,11 @@ const getMemberName = (uid: string, members: GroupMember[]): string => {
   return member?.displayName || member?.email || 'Membre inconnu';
 };
 
-const formatDate = (dateValue?: string | Date | null): string => {
-  if (!dateValue) return 'Date non définie';
+const formatDate = (dateValue?: string | Date | null, isEnglish: boolean = false): string => {
+  if (!dateValue) return isEnglish ? 'Not set' : 'Non définie';
   try {
     const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
-    return date.toLocaleDateString('fr-FR', {
+    return date.toLocaleDateString(isEnglish ? 'en-US' : 'fr-FR', {
       day: 'numeric',
       month: 'short',
     });
@@ -67,7 +67,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
   const insets = useSafeAreaInsets();
   const { isDark } = useThemeStore();
   const tokens = getLiquidGlassTokens(isDark);
-  const { t } = useLanguageStore();
+  const { t, language } = useLanguageStore();
+  const isEn = language === 'en';
 
   const { user } = useAuth();
   const { group, members, loading: groupLoading } = useGroup();
@@ -149,11 +150,17 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
     try {
       await markAsPurchased(productId);
       soundService.playPurchaseSound();
-      setSnackbarMessage(`✓ Achat enregistré : "${productName}" !`);
+      setSnackbarMessage(
+        t('purchaseRegistered', { name: productName }) ||
+          t('purchaseSuccess', { name: productName }) ||
+          `✓ Achat enregistré : "${productName}" !`
+      );
       setSnackbarVisible(true);
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : "Erreur lors de l'enregistrement de l'achat.";
+        err instanceof Error
+          ? err.message
+          : t('purchaseError') || "Erreur lors de l'enregistrement de l'achat.";
       setSnackbarMessage(message);
       setSnackbarVisible(true);
     } finally {
@@ -166,11 +173,17 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
     try {
       await markAsDone(taskId);
       soundService.playTaskCompleteSound();
-      setSnackbarMessage(`✓ Tâche validée : "${taskName}" !`);
+      setSnackbarMessage(
+        t('taskCompleted', { name: taskName }) ||
+          t('cleaningSuccess', { name: taskName }) ||
+          `✓ Tâche validée : "${taskName}" !`
+      );
       setSnackbarVisible(true);
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'Erreur lors de la validation du ménage.';
+        err instanceof Error
+          ? err.message
+          : t('cleaningError') || 'Erreur lors de la validation du ménage.';
       setSnackbarMessage(message);
       setSnackbarVisible(true);
     } finally {
@@ -296,7 +309,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
                 >
                   {isAdmin
                     ? t('adminBadge')
-                    : `${t('memberBadge')} (Admin : ${adminName})`}
+                    : `${t('memberBadge')} (${t('adminLabel') || 'Admin : '}${adminName})`}
                 </Text>
               </View>
             </View>
@@ -336,7 +349,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
                 >
                   <Text style={styles.hubActionIcon}>🛒</Text>
                   <Text style={[styles.hubActionLabel, { color: tokens.primary }]}>
-                    + {t('newProduct')}
+                    + {t('product')}
                   </Text>
                 </TouchableOpacity>
 
@@ -356,7 +369,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
                 >
                   <Text style={styles.hubActionIcon}>🧹</Text>
                   <Text style={[styles.hubActionLabel, { color: tokens.secondary }]}>
-                    + {t('newChore')}
+                    + {t('chore')}
                   </Text>
                 </TouchableOpacity>
 
@@ -376,7 +389,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
                 >
                   <Text style={styles.hubActionIcon}>👥</Text>
                   <Text style={[styles.hubActionLabel, { color: isDark ? '#FDE68A' : '#B45309' }]}>
-                    {t('membersBtn')}
+                    {t('members')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -495,6 +508,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
                           <Text variant="titleMedium" style={[styles.taskTitle, { color: tokens.text }]}>
                             {item.name}
                           </Text>
+                          {item.comment ? (
+                            <Text variant="bodySmall" style={{ color: tokens.primary, fontStyle: 'italic', marginTop: 1 }}>
+                              💬 {item.comment}
+                            </Text>
+                          ) : null}
                           <Text variant="bodySmall" style={{ color: tokens.success, fontWeight: '700', marginTop: 2 }}>
                             🛒 {t('yourTurnToBuy')}
                           </Text>
@@ -551,7 +569,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
                             }}
                           >
                             {overdue ? t('overdue') + ' ' : `📅 ${t('dueDate')} `}
-                            {formatDate(task.nextDueDate)}
+                            {formatDate(task.nextDueDate, isEn)}
                           </Text>
                         </View>
                       </View>

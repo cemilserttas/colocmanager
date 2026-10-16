@@ -41,17 +41,18 @@ export function useCleaningTasks() {
   const reset = useCleaningStore((state) => state.reset);
 
   // Subscribe to real-time cleaning tasks when active group exists
+  const currentGroupId = group?.id || (group as any)?.groupId;
   useEffect(() => {
-    if (!group?.id) {
+    if (!currentGroupId) {
       return;
     }
 
-    const unsubscribe = subscribeToTasks(group.id);
+    const unsubscribe = subscribeToTasks(currentGroupId);
 
     return () => {
       unsubscribe();
     };
-  }, [group?.id, subscribeToTasks]);
+  }, [currentGroupId, subscribeToTasks]);
 
   /**
    * Retrieves the current cleaner user ID for a cleaning task.
@@ -113,7 +114,8 @@ export function useCleaningTasks() {
       rotationOrder?: string[],
       firstDueDate?: Date | string
     ): Promise<void> => {
-      if (!group?.id) {
+      const gId = group?.id || (group as any)?.groupId;
+      if (!gId) {
         throw new Error('Aucun groupe actif sélectionné.');
       }
 
@@ -132,9 +134,9 @@ export function useCleaningTasks() {
 
       const parsed = actualDueDate ? parseUserDate(actualDueDate) || new Date() : new Date();
 
-      await addTaskStore(group.id, name, area, frequency, order, parsed);
+      await addTaskStore(gId, name, area, frequency, order, parsed);
     },
-    [group?.id, members, addTaskStore]
+    [group?.id, (group as any)?.groupId, members, addTaskStore]
   );
 
   /**
@@ -142,13 +144,13 @@ export function useCleaningTasks() {
    */
   const loadActiveGroupTasks = useCallback(
     async (targetGroupId?: string): Promise<void> => {
-      const gId = targetGroupId || group?.id;
+      const gId = targetGroupId || group?.id || (group as any)?.groupId;
       if (!gId) {
         return;
       }
       await loadTasks(gId);
     },
-    [group?.id, loadTasks]
+    [group?.id, (group as any)?.groupId, loadTasks]
   );
 
   return {

@@ -231,11 +231,11 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
       await updateTask(task.id, { rotationOrder: tempOrder });
       setReorderDialogVisible(false);
       soundService.playSuccessSound();
-      setSnackbarMessage("L'ordre de rotation pour cette corvée a été mis à jour.");
+      setSnackbarMessage(t('orderUpdated') || "L'ordre de rotation pour cette corvée a été mis à jour.");
       setSnackbarVisible(true);
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : "Erreur lors de la mise à jour de l'ordre.";
+        err instanceof Error ? err.message : t('orderUpdateError') || "Erreur lors de la mise à jour de l'ordre.";
       setSnackbarMessage(message);
       setSnackbarVisible(true);
     } finally {
@@ -259,10 +259,10 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
       await updateTask(task.id, { frequency: tempFrequency });
       setFrequencyDialogVisible(false);
       soundService.playSuccessSound();
-      setSnackbarMessage(`Fréquence mise à jour : ${formatFrequency(tempFrequency)}.`);
+      setSnackbarMessage(t('orderUpdated') || `Fréquence mise à jour.`);
       setSnackbarVisible(true);
     } catch {
-      setSnackbarMessage('Erreur lors de la modification de la fréquence.');
+      setSnackbarMessage(t('orderUpdateError') || 'Erreur lors de la modification de la fréquence.');
       setSnackbarVisible(true);
     } finally {
       setSavingFrequency(false);
@@ -283,7 +283,7 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
     if (!task || !updateTask) return;
     const parsed = parseUserDate(tempDueDateText);
     if (!parsed) {
-      setSnackbarMessage('Date invalide. Format AAAA-MM-JJ ou JJ/MM/AAAA.');
+      setSnackbarMessage(t('invalidDueDate') || 'Date invalide. Format AAAA-MM-JJ ou JJ/MM/AAAA.');
       setSnackbarVisible(true);
       return;
     }
@@ -292,10 +292,10 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
       await updateTask(task.id, { nextDueDate: parsed });
       setDueDateDialogVisible(false);
       soundService.playSuccessSound();
-      setSnackbarMessage("Date d'échéance mise à jour avec succès.");
+      setSnackbarMessage(t('orderUpdated') || "Date d'échéance mise à jour avec succès.");
       setSnackbarVisible(true);
     } catch {
-      setSnackbarMessage("Erreur lors de la mise à jour de l'échéance.");
+      setSnackbarMessage(t('orderUpdateError') || "Erreur lors de la mise à jour de l'échéance.");
       setSnackbarVisible(true);
     } finally {
       setSavingDueDate(false);
@@ -312,7 +312,7 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
       navigation.goBack();
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'Erreur lors de la suppression de la tâche.';
+        err instanceof Error ? err.message : t('deleteError') || 'Erreur lors de la suppression de la tâche.';
       setSnackbarMessage(message);
       setSnackbarVisible(true);
       setDeleting(false);
@@ -324,17 +324,17 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
     if (!task) return;
     try {
       await notificationService.sendPeerReminder(
-        user?.displayName || 'Un colocataire',
+        user?.displayName || t('roommate'),
         targetUid,
         'cleaning',
         task.name,
         task.id
       );
       soundService.playSuccessSound();
-      setSnackbarMessage(`✓ Rappel ménage envoyé à ${targetName} dans Firebase !`);
+      setSnackbarMessage(t('reminderSent', { name: targetName }) || `✓ Rappel ménage envoyé à ${targetName} !`);
       setSnackbarVisible(true);
     } catch {
-      setSnackbarMessage("Erreur lors de l'envoi du rappel.");
+      setSnackbarMessage(t('reminderError') || "Erreur lors de l'envoi du rappel.");
       setSnackbarVisible(true);
     }
   };
@@ -342,7 +342,7 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
   if (!task) {
     return (
       <View style={[styles.notFoundContainer, { backgroundColor: tokens.bg }]}>
-        <Text variant="titleMedium" style={{ color: tokens.text }}>Tâche de ménage introuvable.</Text>
+        <Text variant="titleMedium" style={{ color: tokens.text }}>{t('taskNotFound')}</Text>
         <Button
           mode="contained"
           buttonColor={tokens.accent}
@@ -352,7 +352,7 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
           }}
           style={{ marginTop: spacing.md, borderRadius: 20 }}
         >
-          Retour à la liste
+          {t('backToList')}
         </Button>
       </View>
     );
@@ -388,7 +388,7 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
             style={{ margin: 0 }}
             labelStyle={{ fontSize: 16, color: tokens.accent, fontWeight: '700' }}
           >
-            ← Retour
+            ← {t('back')}
           </Button>
           <Text variant="titleMedium" style={[styles.screenTitle, { color: tokens.text }]} numberOfLines={1}>
             {task.name}
@@ -501,7 +501,7 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
                       </Text>
                       {isCurrent && (
                         <Text variant="labelSmall" style={styles.currentTurnBadge}>
-                          ★ Actuellement responsable du ménage
+                          {t('theirTurnToClean')}
                         </Text>
                       )}
                     </View>
@@ -518,7 +518,7 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
                         ]}
                       >
                         <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0284C7' }}>
-                          🔔 Rappeler
+                          {t('remindBtn')}
                         </Text>
                       </TouchableOpacity>
                     )}
@@ -532,7 +532,7 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
           {/* Cleaning Execution History Section */}
           <View style={styles.sectionHeaderRow}>
             <Text variant="titleMedium" style={[styles.sectionTitle, { color: tokens.text }]}>
-              Historique des nettoyages
+              {t('cleaningHistory')}
             </Text>
           </View>
 
@@ -543,10 +543,11 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
               <View style={styles.emptyHistory}>
                 <Text variant="bodyMedium" style={[styles.emptyHistoryText, { color: tokens.textSecondary }]}>
                   {task.lastCleanedAt
-                    ? `Dernier nettoyage effectué le ${formatDate(task.lastCleanedAt)} par ${
-                        task.lastCleanedBy ? getMemberName(task.lastCleanedBy, members) : 'un coloc'
-                      }.`
-                    : 'Aucun enregistrement pour le moment.'}
+                    ? t('lastCleanRecorded', {
+                        date: formatDate(task.lastCleanedAt),
+                        name: task.lastCleanedBy ? getMemberName(task.lastCleanedBy, members) : t('roommate'),
+                      })
+                    : t('noCleaningsYet')}
                 </Text>
               </View>
             ) : (
@@ -556,7 +557,7 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
                     <Text style={{ fontSize: 20, marginRight: spacing.sm }}>✅</Text>
                     <View style={styles.historyDetails}>
                       <Text variant="bodyMedium" style={[styles.historyBuyer, { color: tokens.text }]}>
-                        Nettoyé par {getMemberName(record.cleanerUid, members)}
+                        {t('cleanedBy', { name: getMemberName(record.cleanerUid, members) })}
                       </Text>
                       <Text variant="bodySmall" style={[styles.historyDate, { color: tokens.textSecondary }]}>
                         {formatDate(record.cleanedAt)}
@@ -580,7 +581,7 @@ export const CleaningDetailScreen: React.FC<CleaningDetailScreenProps> = ({
                 setDeleteDialogVisible(true);
               }}
             >
-              🗑️ Supprimer cette tâche
+              {t('deleteTask')}
             </Button>
           )}
         </ScrollView>

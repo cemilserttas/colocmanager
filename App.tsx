@@ -50,6 +50,7 @@ const linking: LinkingOptions<RootStackParamList> = {
               AddProduct: 'shopping-add',
             },
           },
+          Inventory: 'inventory',
           Cleaning: {
             screens: {
               CleaningList: 'cleaning',

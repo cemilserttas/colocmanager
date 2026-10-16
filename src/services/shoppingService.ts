@@ -28,7 +28,8 @@ export const shoppingService = {
     groupId: string,
     name: string,
     icon: string,
-    rotationOrder: string[]
+    rotationOrder: string[],
+    comment?: string
   ): Promise<Product> {
     const now = new Date().toISOString();
 
@@ -39,7 +40,8 @@ export const shoppingService = {
         productId: `prod-${Date.now()}`,
         groupId,
         name: name.trim(),
-        icon: icon.trim(),
+        icon: (icon || '🛒').trim(),
+        ...(comment?.trim() ? { comment: comment.trim() } : {}),
         rotationOrder,
         currentTurnIndex: 0,
         isActive: true,
@@ -60,7 +62,8 @@ export const shoppingService = {
         id: productRef.id,
         groupId,
         name: name.trim(),
-        icon: icon.trim(),
+        icon: (icon || '🛒').trim(),
+        ...(comment?.trim() ? { comment: comment.trim() } : {}),
         rotationOrder,
         currentTurnIndex: 0,
         isActive: true,
@@ -79,7 +82,8 @@ export const shoppingService = {
         id: `prod-${Date.now()}`,
         groupId,
         name: name.trim(),
-        icon: icon.trim(),
+        icon: (icon || '🛒').trim(),
+        ...(comment?.trim() ? { comment: comment.trim() } : {}),
         rotationOrder,
         currentTurnIndex: 0,
         isActive: true,
@@ -274,8 +278,9 @@ export const shoppingService = {
   },
 
   subscribeToProducts(groupId: string, callback: (products: Product[]) => void): () => void {
+    shoppingSubscribers.add(callback);
+
     if (isDemoMode()) {
-      shoppingSubscribers.add(callback);
       mockStorage.getProducts().then(callback);
       return () => {
         shoppingSubscribers.delete(callback);
@@ -288,10 +293,22 @@ export const shoppingService = {
       where('isActive', '==', true)
     );
 
-    return onSnapshot(q, (snapshot) => {
-      const items = snapshot.docs.map((docSnap) => docSnap.data() as Product);
-      callback(items);
-    });
+    const unsub = onSnapshot(
+      q,
+      (snapshot) => {
+        const items = snapshot.docs.map((docSnap) => docSnap.data() as Product);
+        callback(items);
+      },
+      (error) => {
+        console.warn('Realtime products subscription error, falling back to query:', error);
+        shoppingService.getProducts(groupId).then(callback).catch(() => {});
+      }
+    );
+
+    return () => {
+      shoppingSubscribers.delete(callback);
+      unsub();
+    };
   },
 };
 

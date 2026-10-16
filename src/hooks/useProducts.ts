@@ -38,17 +38,18 @@ export function useProducts() {
   const reset = useShoppingStore((state) => state.reset);
 
   // Subscribe to real-time products updates when group is active
+  const currentGroupId = group?.id || (group as any)?.groupId;
   useEffect(() => {
-    if (!group?.id) {
+    if (!currentGroupId) {
       return;
     }
 
-    const unsubscribe = subscribeToProducts(group.id);
+    const unsubscribe = subscribeToProducts(currentGroupId);
 
     return () => {
       unsubscribe();
     };
-  }, [group?.id, subscribeToProducts]);
+  }, [currentGroupId, subscribeToProducts]);
 
   /**
    * Retrieves the current buyer user ID for a product based on its rotation order and turn index.
@@ -103,18 +104,19 @@ export function useProducts() {
    * and rotationOrder to all group members if not explicitly provided.
    */
   const addProduct = useCallback(
-    async (name: string, icon: string, rotationOrder?: string[]): Promise<void> => {
-      if (!group?.id) {
+    async (name: string, icon: string, rotationOrder?: string[], comment?: string): Promise<void> => {
+      const gId = group?.id || (group as any)?.groupId;
+      if (!gId) {
         throw new Error('Aucun groupe actif sélectionné.');
       }
       const order =
         rotationOrder && rotationOrder.length > 0
           ? rotationOrder
-          : members.map((m) => m.userId);
+          : members.map((m) => m.userId || m.id);
 
-      await addProductStore(group.id, name, icon, order);
+      await addProductStore(gId, name, icon, order, comment);
     },
-    [group?.id, members, addProductStore]
+    [group?.id, (group as any)?.groupId, members, addProductStore]
   );
 
   /**

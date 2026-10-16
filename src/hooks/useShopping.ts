@@ -12,11 +12,11 @@ export function useShopping() {
 
   const addProduct = useCallback(
     async (...args: any[]) => {
-      if (args.length === 3) {
-        // addProduct(name, icon, rotationOrder)
-        const [name, icon, rotationOrder] = args;
+      if (args.length === 3 || args.length === 4) {
+        // addProduct(name, icon, rotationOrder, comment?)
+        const [name, icon, rotationOrder, comment] = args;
         if (!currentGroupId) throw new Error('Aucun groupe actif');
-        return productsHook.addProduct(name, icon, rotationOrder);
+        return productsHook.addProduct(name, icon, rotationOrder, comment);
       }
       return (productsHook.addProduct as any)(...args);
     },

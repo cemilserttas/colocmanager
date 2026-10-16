@@ -7,6 +7,7 @@ export interface Product {
   groupId: string;
   name: string;
   icon: string;
+  comment?: string;
   currentTurnIndex: number;
   rotationOrder: string[];
   isActive: boolean;

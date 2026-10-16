@@ -36,11 +36,11 @@ const getMemberName = (uid: string, members: GroupMember[]): string => {
 /**
  * Formats ISO date string to localized readable format.
  */
-const formatDate = (dateValue?: string | Date | null): string => {
-  if (!dateValue) return 'Non définie';
+const formatDate = (dateValue?: string | Date | null, isEnglish: boolean = false): string => {
+  if (!dateValue) return isEnglish ? 'Not set' : 'Non définie';
   try {
     const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
-    return date.toLocaleDateString('fr-FR', {
+    return date.toLocaleDateString(isEnglish ? 'en-US' : 'fr-FR', {
       day: 'numeric',
       month: 'short',
     });
@@ -83,7 +83,8 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
   const insets = useSafeAreaInsets();
   const { isDark } = useThemeStore();
   const tokens = getLiquidGlassTokens(isDark);
-  const { t } = useLanguageStore();
+  const { t, language } = useLanguageStore();
+  const isEn = language === 'en';
 
   const { user } = useAuth();
   const { group, members } = useGroup();
@@ -128,11 +129,16 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
     try {
       await markAsDone(taskId);
       soundService.playTaskCompleteSound();
-      setSnackbarMessage(`✓ Nettoyage validé : "${taskName}" ! Le tour passe au colocataire suivant.`);
+      setSnackbarMessage(
+        t('cleaningSuccess', { name: taskName }) ||
+          `✓ Nettoyage validé : "${taskName}" ! Le tour passe au colocataire suivant.`
+      );
       setSnackbarVisible(true);
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'Erreur lors de la validation du ménage.';
+        err instanceof Error
+          ? err.message
+          : t('cleaningError') || 'Erreur lors de la validation du ménage.';
       setSnackbarMessage(message);
       setSnackbarVisible(true);
     } finally {
@@ -155,7 +161,7 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
       ? isMyTurn
         ? (t('yourTurn') || 'À toi !')
         : getMemberName(currentCleanerUid, members)
-      : 'Personne';
+      : (t('nobody') || 'Personne');
 
     const overdue = isOverdue(item.nextDueDate);
     const isActionRunning = actionLoadingId === item.id;
@@ -196,11 +202,11 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
                   style={[styles.frequencyChip, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}
                   textStyle={{ fontSize: 11, fontWeight: '700', color: tokens.textSecondary }}
                 >
-                  {FREQUENCY_LABELS[item.frequency] || item.frequency}
+                  {t(item.frequency) || FREQUENCY_LABELS[item.frequency] || item.frequency}
                 </Chip>
               </View>
               <Text variant="bodySmall" style={[styles.areaText, { color: tokens.textSecondary }]}>
-                {t('areaLabel') || 'Zone'} : {item.area || 'Parties communes'}
+                {t('areaLabel') || 'Zone'} : {item.area || t('commonAreas') || 'Parties communes'}
               </Text>
             </View>
           </View>
@@ -239,7 +245,7 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
                   { color: overdue ? '#EF4444' : tokens.text, fontWeight: '700' },
                 ]}
               >
-                {formatDate(item.nextDueDate)}
+                {formatDate(item.nextDueDate, isEn)}
               </Text>
             </View>
           </View>
@@ -272,9 +278,9 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
         {isAdmin && (
           <View style={[styles.adminBar, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.adminBarTitle, { color: '#0284C7' }]}>👑 Administration Nettoyage</Text>
+              <Text style={[styles.adminBarTitle, { color: '#0284C7' }]}>{t('adminCleaningTitle')}</Text>
               <Text style={[styles.adminBarSub, { color: tokens.textSecondary }]}>
-                Créez des corvées récurrentes et gérez les attributions.
+                {t('adminCleaningSub')}
               </Text>
             </View>
           </View>
@@ -320,7 +326,7 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
                       navigation.navigate('AddCleaningTask');
                     }}
                   >
-                    {t('newChore') || '+ Créer une tâche'}
+                    + {t('chore')}
                   </Button>
                 )}
               </View>
@@ -333,7 +339,7 @@ export const CleaningListScreen: React.FC<CleaningListScreenProps> = ({ navigati
       {isAdmin && (
         <FAB
           icon="plus"
-          label={t('newChore') || 'Nouvelle tâche'}
+          label={t('chore') || 'Ménage'}
           style={[styles.fab, { backgroundColor: '#0284C7', bottom: 104 + insets.bottom }]}
           color="#FFFFFF"
           onPress={() => {

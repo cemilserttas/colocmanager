@@ -62,7 +62,8 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
   const insets = useSafeAreaInsets();
   const { isDark } = useThemeStore();
   const tokens = getLiquidGlassTokens(isDark);
-  const { t } = useLanguageStore();
+  const { t, language } = useLanguageStore();
+  const isEn = language === 'en';
 
   const { user } = useAuth();
   const { group, members } = useGroup();
@@ -115,26 +116,26 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
     const trimmedArea = area.trim();
 
     if (!trimmedName) {
-      setErrorMessage(t('choreNamePlaceholder') || 'Veuillez saisir le nom de la tâche.');
+      setErrorMessage(t('choreNameRequired'));
       setSnackbarVisible(true);
       return;
     }
 
     if (!trimmedArea) {
-      setErrorMessage(t('areaPlaceholder') || 'Veuillez spécifier la zone ou pièce concernée.');
+      setErrorMessage(t('areaRequired'));
       setSnackbarVisible(true);
       return;
     }
 
     const parsedDate = parseUserDate(dueDateText);
     if (!parsedDate || isNaN(parsedDate.getTime())) {
-      setErrorMessage("La date d'échéance est invalide. Formats acceptés : AAAA-MM-JJ (ex: 2026-10-21) ou JJ/MM/AAAA");
+      setErrorMessage(t('invalidDueDate'));
       setSnackbarVisible(true);
       return;
     }
 
     if (rotationOrder.length < 2 && members.length >= 2) {
-      setErrorMessage('La rotation doit comporter au moins 2 colocataires.');
+      setErrorMessage(t('rotationMinMembers'));
       setSnackbarVisible(true);
       return;
     }
@@ -177,22 +178,11 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
         } catch {}
       }
 
-      try {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: '🧹 Nouvelle tâche de ménage !',
-            body: `L'administrateur a programmé "${trimmedName}" (${trimmedArea}).`,
-            sound: true,
-          },
-          trigger: null,
-        });
-      } catch {}
-
       soundService.playSuccessSound();
       navigation.goBack();
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'Erreur lors de la création de la tâche.';
+        err instanceof Error ? err.message : isEn ? 'Error creating cleaning chore.' : 'Erreur lors de la création de la tâche.';
       setErrorMessage(message);
       setSnackbarVisible(true);
       setSubmitting(false);
@@ -217,7 +207,7 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
           }}
           style={{ marginTop: spacing.md, backgroundColor: tokens.accent, borderRadius: 20 }}
         >
-          Retour
+          {t('back')}
         </Button>
       </View>
     );
@@ -249,7 +239,7 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
             style={{ margin: 0 }}
             labelStyle={{ fontSize: 16, color: tokens.accent, fontWeight: '700' }}
           >
-            ← Retour
+            ← {t('back')}
           </Button>
           <Text variant="titleMedium" style={[styles.screenTitle, { color: tokens.text }]}>
             {t('addChoreTitle') || 'Nouvelle Tâche'}

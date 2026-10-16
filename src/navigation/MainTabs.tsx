@@ -27,6 +27,7 @@ import AddCleaningTaskScreen from '../screens/cleaning/AddCleaningTaskScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import ManageMembersScreen from '../screens/group/ManageMembersScreen';
 import AdminPortalScreen from '../screens/admin/AdminPortalScreen';
+import InventoryScreen from '../screens/inventory/InventoryScreen';
 
 // Shopping Stack
 const ShoppingStack = createNativeStackNavigator<ShoppingStackParamList>();
@@ -162,6 +163,7 @@ function LiquidGlassTabBar({ state, descriptors, navigation }: any) {
   const tabLabels: Record<string, { labelKey: any; emoji: string }> = {
     Dashboard: { labelKey: 'home', emoji: '🏠' },
     Shopping: { labelKey: 'shopping', emoji: '🛒' },
+    Inventory: { labelKey: 'inventory', emoji: '📦' },
     Cleaning: { labelKey: 'cleaning', emoji: '🧹' },
     Profile: { labelKey: 'profile', emoji: '👤' },
   };
@@ -266,6 +268,10 @@ const MainTabs: React.FC = () => {
       <Tab.Screen
         name="Shopping"
         component={ShoppingNavigator}
+      />
+      <Tab.Screen
+        name="Inventory"
+        component={InventoryScreen}
       />
       <Tab.Screen
         name="Cleaning"

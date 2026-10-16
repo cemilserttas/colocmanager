@@ -31,10 +31,6 @@ const getMemberName = (uid: string, members: GroupMember[]): string => {
   return member?.displayName || member?.email || 'Membre inconnu';
 };
 
-const SUGGESTED_ICONS = [
-  '🧻', '🧼', '☕', '🧽', '🥛', '🍞', '🍳', '🧴', '🗑️', '🧂', '🍎', '🧃', '🍷', '🍕', '🧺', '🧯',
-];
-
 interface AddProductScreenProps {
   navigation: {
     goBack: () => void;
@@ -45,14 +41,15 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
   const insets = useSafeAreaInsets();
   const { isDark } = useThemeStore();
   const tokens = getLiquidGlassTokens(isDark);
-  const { t } = useLanguageStore();
+  const { t, language } = useLanguageStore();
+  const isEn = language === 'en';
 
   const { user } = useAuth();
   const { group, members } = useGroup();
   const { addProduct, loading } = useShopping();
 
   const [name, setName] = useState('');
-  const [selectedIcon, setSelectedIcon] = useState('🧻');
+  const [comment, setComment] = useState('');
   const [rotationOrder, setRotationOrder] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
@@ -94,26 +91,26 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
     soundService.playPopSound();
     const trimmedName = name.trim();
     if (!trimmedName) {
-      setErrorMessage('Veuillez saisir le nom du produit.');
+      setErrorMessage(t('productNameRequired'));
       setSnackbarVisible(true);
       return;
     }
 
     if (rotationOrder.length < 2 && members.length >= 2) {
-      setErrorMessage("L'ordre de rotation doit contenir au moins 2 colocataires.");
+      setErrorMessage(t('rotationMinMembers'));
       setSnackbarVisible(true);
       return;
     }
 
     if (rotationOrder.length === 0) {
-      setErrorMessage('Veuillez inclure au moins un membre dans la rotation.');
+      setErrorMessage(t('rotationAtLeastOne'));
       setSnackbarVisible(true);
       return;
     }
 
     setSubmitting(true);
     try {
-      await addProduct(trimmedName, selectedIcon, rotationOrder);
+      await addProduct(trimmedName, '🛒', rotationOrder, comment.trim() || undefined);
 
       // Notify roommates in Firestore & mobile push
       const firstBuyerUid = rotationOrder[0];
@@ -143,22 +140,11 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
         } catch {}
       }
 
-      try {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: '🛒 Nouveau produit ajouté !',
-            body: `L'administrateur a ajouté "${trimmedName}" à la colocation.`,
-            sound: true,
-          },
-          trigger: null,
-        });
-      } catch {}
-
       soundService.playSuccessSound();
       navigation.goBack();
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'Erreur lors de la création du produit.';
+        err instanceof Error ? err.message : isEn ? 'Error creating product.' : 'Erreur lors de la création du produit.';
       setErrorMessage(message);
       setSnackbarVisible(true);
       setSubmitting(false);
@@ -170,10 +156,10 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
       <View style={[styles.unauthorizedContainer, { backgroundColor: tokens.bg }]}>
         <Text style={styles.lockIcon}>🔒</Text>
         <Text variant="titleMedium" style={{ fontWeight: '800', color: tokens.text }}>
-          Accès réservé à l'administrateur
+          {t('adminShoppingTitle')}
         </Text>
         <Text variant="bodyMedium" style={{ color: tokens.textSecondary, textAlign: 'center', marginTop: 6, paddingHorizontal: 24 }}>
-          Seul l'administrateur de la colocation peut ajouter de nouveaux produits à acheter.
+          {t('adminShoppingSub')}
         </Text>
         <Button
           mode="contained"
@@ -182,7 +168,7 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
           onPress={() => navigation.goBack()}
           style={{ marginTop: 16, borderRadius: 16 }}
         >
-          Retour
+          {t('back')}
         </Button>
       </View>
     );
@@ -212,7 +198,7 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
             textColor={tokens.primary}
             labelStyle={{ fontSize: 16 }}
           >
-            ← Retour
+            ← {t('back')}
           </Button>
           <Text variant="titleMedium" style={{ fontWeight: '800', color: tokens.text }}>
             {t('addProductTitle')}
@@ -243,40 +229,24 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
             />
           </View>
 
-          {/* Icon Picker */}
+          {/* Comment Input */}
           <View style={[styles.cardSection, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
             <Text variant="titleSmall" style={[styles.sectionLabel, { color: tokens.text }]}>
-              {t('iconLabel')} {selectedIcon}
+              {t('commentLabel')}
             </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.iconsRow}
-            >
-              {SUGGESTED_ICONS.map((icon) => {
-                const isSelected = selectedIcon === icon;
-                return (
-                  <TouchableOpacity
-                    key={`icon-${icon}`}
-                    onPress={() => {
-                      soundService.playPopSound();
-                      setSelectedIcon(icon);
-                    }}
-                    style={[
-                      styles.iconChip,
-                      {
-                        backgroundColor: isSelected
-                          ? (isDark ? 'rgba(10, 132, 255, 0.25)' : 'rgba(10, 132, 255, 0.12)')
-                          : (isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)'),
-                        borderColor: isSelected ? tokens.primary : tokens.border,
-                      },
-                    ]}
-                  >
-                    <Text style={styles.iconEmoji}>{icon}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+            <TextInput
+              placeholder={t('commentPlaceholder')}
+              value={comment}
+              onChangeText={setComment}
+              mode="outlined"
+              style={{ backgroundColor: 'transparent' }}
+              textColor={tokens.text}
+              outlineColor={tokens.borderSubtle}
+              activeOutlineColor={tokens.primary}
+              disabled={submitting}
+              multiline
+              numberOfLines={2}
+            />
           </View>
 
           {/* Rotation Order Section */}

@@ -41,6 +41,13 @@ export function useAuth() {
     [user, setUser]
   );
 
+  const updatePassword = useCallback(
+    async (newPassword: string) => {
+      await authService.updateCurrentUserPassword(newPassword);
+    },
+    []
+  );
+
   return {
     user,
     isLoading,
@@ -56,6 +63,7 @@ export function useAuth() {
     logout: signOut,
     resetPassword,
     updateUserProfile,
+    updatePassword,
     clearError,
   };
 }

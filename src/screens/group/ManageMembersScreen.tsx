@@ -163,12 +163,12 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
               </Text>
               {isSelf && (
                 <Text variant="bodySmall" style={[styles.selfBadge, { color: tokens.primary }]}>
-                  (Vous)
+                  ({t('you') || 'Vous'})
                 </Text>
               )}
             </View>
             <Text variant="bodySmall" style={{ color: tokens.textSecondary }}>
-              {item.email || 'Email non renseigné'}
+              {item.email || t('noEmail') || 'Email non renseigné'}
             </Text>
           </View>
         </View>
@@ -195,7 +195,7 @@ export const ManageMembersScreen: React.FC<ManageMembersScreenProps> = ({ naviga
                   style={[styles.actionPillBtn, { borderColor: tokens.adminGold }]}
                 >
                   <Text style={{ fontSize: 12, fontWeight: '800', color: '#B45309' }}>
-                    👑 {t('transferAdminBtn')}
+                    {t('transferAdminBtn')}
                   </Text>
                 </TouchableOpacity>
 

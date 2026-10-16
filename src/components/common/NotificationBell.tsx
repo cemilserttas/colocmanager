@@ -11,10 +11,16 @@ import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
 import { useLanguageStore } from '../../store/useLanguageStore';
 import { soundService } from '../../services/soundService';
 
+import {
+  translateNotificationTitle,
+  translateNotificationBody,
+} from '../../utils/notificationTranslation';
+
 export const NotificationBell: React.FC = () => {
   const { isDark } = useThemeStore();
   const tokens = getLiquidGlassTokens(isDark);
-  const { t } = useLanguageStore();
+  const { t, language } = useLanguageStore();
+  const isEn = language === 'en';
   const { notifications, unreadCount, markAsRead } = useNotifications();
   const [modalVisible, setModalVisible] = useState(false);
 
@@ -131,7 +137,7 @@ export const NotificationBell: React.FC = () => {
                               color: tokens.text,
                             }}
                           >
-                            {notif.title}
+                            {translateNotificationTitle(notif.title, isEn)}
                           </Text>
                           {!notif.isRead && <View style={styles.unreadIndicator} />}
                         </View>
@@ -139,7 +145,7 @@ export const NotificationBell: React.FC = () => {
                           variant="bodySmall"
                           style={{ color: tokens.textSecondary, marginTop: 2, lineHeight: 17 }}
                         >
-                          {notif.body}
+                          {translateNotificationBody(notif.body, isEn)}
                         </Text>
                       </View>
                     </TouchableOpacity>
@@ -155,7 +161,7 @@ export const NotificationBell: React.FC = () => {
               textColor={tokens.primary}
               style={{ borderRadius: 20 }}
             >
-              Fermer
+              {t('close') || 'Fermer'}
             </Button>
           </Dialog.Actions>
         </Dialog>
