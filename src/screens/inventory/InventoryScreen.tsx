@@ -56,9 +56,9 @@ export const InventoryScreen: React.FC = () => {
 
   const { user } = useAuth();
   const { members } = useGroup();
-  const { products = [], loading, fetchProducts } = useShopping();
+  const { products = [], loading, fetchProducts, requestRestockMultiple } = useShopping();
 
-  const [filterMode, setFilterMode] = useState<'purchased' | 'all'>('purchased');
+  const [filterMode, setFilterMode] = useState<'purchased' | 'all'>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -66,9 +66,9 @@ export const InventoryScreen: React.FC = () => {
 
   const displayedProducts = useMemo(() => {
     if (filterMode === 'purchased') {
-      return products.filter((p) => Boolean(p.lastPurchasedAt));
+      return products.filter((p) => p.isActive !== false && Boolean(p.lastPurchasedAt));
     }
-    return products;
+    return products.filter((p) => p.isActive !== false);
   }, [products, filterMode]);
 
   const handleRefresh = useCallback(async () => {
@@ -115,45 +115,10 @@ export const InventoryScreen: React.FC = () => {
 
     try {
       const senderName = user?.displayName || user?.email || (isEn ? 'A roommate' : 'Un colocataire');
-      const selectedProducts = products.filter((p) => selectedIds.has(p.id));
+      const selectedIdList = Array.from(selectedIds);
 
-      // Group products by assignee to send grouped notifications
-      const buyerProductsMap: Record<string, string[]> = {};
-
-      for (const prod of selectedProducts) {
-        const rotationList =
-          prod.rotationOrder && prod.rotationOrder.length > 0
-            ? prod.rotationOrder
-            : members.map((m) => m.userId || m.id);
-        const currentBuyerUid =
-          getCurrentAssignee(rotationList, prod.currentTurnIndex ?? 0) ||
-          rotationList[0] ||
-          user?.uid;
-        if (currentBuyerUid) {
-          if (!buyerProductsMap[currentBuyerUid]) {
-            buyerProductsMap[currentBuyerUid] = [];
-          }
-          buyerProductsMap[currentBuyerUid].push(prod.name);
-        }
-      }
-
-      for (const [buyerUid, productNames] of Object.entries(buyerProductsMap)) {
-        const productListStr = productNames.join(', ');
-        const title = t('restockAlertTitle');
-        const body = t('restockAlertBody', {
-          senderName,
-          products: productListStr,
-        });
-
-        // Save to Firestore (dispatches Expo remote push if token registered,
-        // and triggers real-time listener for in-app alert)
-        await notificationService.addNotificationToFirestore(
-          buyerUid,
-          'purchase_turn',
-          title,
-          body
-        );
-      }
+      // Marks products as needsRestock: true in Firestore/mockStorage & dispatches turn alert to responsible buyers
+      await requestRestockMultiple(selectedIdList, senderName);
 
       soundService.playSuccessSound();
       setSnackbarMessage(t('restockSuccess'));
@@ -186,6 +151,8 @@ export const InventoryScreen: React.FC = () => {
     const lastBuyerName = item.lastPurchasedBy
       ? getMemberName(item.lastPurchasedBy, members)
       : null;
+
+    const isInStock = item.needsRestock === false;
 
     return (
       <TouchableOpacity
@@ -222,9 +189,28 @@ export const InventoryScreen: React.FC = () => {
 
           {/* Product Info */}
           <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text variant="titleMedium" style={{ fontWeight: '800', color: tokens.text }}>
-              {item.name}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text variant="titleMedium" style={{ fontWeight: '800', color: tokens.text, flex: 1, marginRight: 6 }}>
+                {item.name}
+              </Text>
+              <Chip
+                compact
+                style={{
+                  backgroundColor: isInStock
+                    ? (isDark ? 'rgba(16, 185, 129, 0.16)' : '#ECFDF5')
+                    : (isDark ? 'rgba(239, 68, 68, 0.16)' : '#FEF2F2'),
+                  borderRadius: 12,
+                  height: 24,
+                }}
+                textStyle={{
+                  color: isInStock ? '#10B981' : '#EF4444',
+                  fontWeight: '800',
+                  fontSize: 10.5,
+                }}
+              >
+                {isInStock ? (t('inStock') || 'En stock') : (t('itemToRepurchase') || 'À racheter')}
+              </Chip>
+            </View>
 
             {item.comment ? (
               <Text variant="bodySmall" style={{ color: tokens.primary, marginTop: 2, fontStyle: 'italic' }}>
@@ -234,7 +220,8 @@ export const InventoryScreen: React.FC = () => {
 
             <View style={styles.metaRow}>
               <Text variant="bodySmall" style={{ color: tokens.textSecondary }}>
-                {t('turnLabel')} <Text style={{ fontWeight: '700', color: tokens.text }}>{currentBuyerName}</Text>
+                {isInStock ? (t('nextTurn') || 'Prochain tour :') : (t('turnLabel') || 'Tour :')}{' '}
+                <Text style={{ fontWeight: '700', color: tokens.text }}>{currentBuyerName}</Text>
               </Text>
             </View>
 
@@ -351,6 +338,27 @@ export const InventoryScreen: React.FC = () => {
         ListEmptyComponent={
           loading && !refreshing ? (
             <ActivityIndicator style={{ marginTop: 40 }} size="large" color={tokens.primary} />
+          ) : filterMode === 'purchased' && products.length > 0 ? (
+            <View style={[styles.emptyCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+              <Text style={{ fontSize: 44, marginBottom: 8 }}>📦</Text>
+              <Text variant="titleMedium" style={{ fontWeight: '800', color: tokens.text }}>
+                {t('noInventory')}
+              </Text>
+              <Text variant="bodySmall" style={{ color: tokens.textSecondary, textAlign: 'center', marginTop: 4, paddingHorizontal: 16 }}>
+                {t('noInventorySub')}
+              </Text>
+              <Button
+                mode="outlined"
+                textColor={tokens.primary}
+                style={{ marginTop: 14, borderRadius: 18 }}
+                onPress={() => {
+                  soundService.playPopSound();
+                  setFilterMode('all');
+                }}
+              >
+                {t('allProductsCatalog')} ({products.length})
+              </Button>
+            </View>
           ) : (
             <View style={[styles.emptyCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
               <Text style={{ fontSize: 44, marginBottom: 8 }}>📦</Text>

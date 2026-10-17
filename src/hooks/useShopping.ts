@@ -32,12 +32,28 @@ export function useShopping() {
     [user?.uid, productsHook]
   );
 
+  const requestRestock = useCallback(
+    async (productId: string, senderDisplayName?: string) => {
+      return productsHook.requestRestock(productId, user?.uid, senderDisplayName || user?.displayName);
+    },
+    [user?.uid, user?.displayName, productsHook]
+  );
+
+  const requestRestockMultiple = useCallback(
+    async (productIds: string[], senderDisplayName?: string) => {
+      return productsHook.requestRestockMultiple(productIds, user?.uid, senderDisplayName || user?.displayName);
+    },
+    [user?.uid, user?.displayName, productsHook]
+  );
+
   return {
     ...productsHook,
     loading: productsHook.isLoading,
     addProduct,
     deleteProduct: productsHook.removeProduct,
     markAsPurchased,
+    requestRestock,
+    requestRestockMultiple,
     fetchProducts: productsHook.loadProducts,
     fetchProductHistory: productsHook.getProductHistory,
   };

@@ -31,6 +31,10 @@ export function translateNotificationBody(body: string, isEnglish: boolean): str
 
   // Shopping turn
   translated = translated.replace(
+    /"([^"]+)" a été acheté\. Il est maintenant en stock\./gi,
+    '"$1" was purchased. It is now in stock.'
+  );
+  translated = translated.replace(
     /"([^"]+)" a été acheté\. C'est maintenant à votre tour pour le prochain achat\s*!/gi,
     '"$1" was purchased. It is now your turn for the next purchase!'
   );

@@ -43,7 +43,8 @@ const ProductCard: React.FC<ProductCardProps> = ({
   onPress,
 }) => {
   const currentBuyerId = getCurrentAssignee(product.rotationOrder, product.currentTurnIndex);
-  const isMyTurn = currentBuyerId === currentUserId;
+  const isNeedsRestock = product.needsRestock !== false;
+  const isMyTurn = currentBuyerId === currentUserId && isNeedsRestock;
   const buyerName = getMemberName(currentBuyerId, members, currentUserId);
 
   return (
@@ -60,7 +61,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
           <View style={styles.content}>
             <Text style={styles.productName}>{product.name}</Text>
             <Text style={[styles.turnText, isMyTurn && styles.turnTextHighlight]}>
-              Tour : {buyerName} {isMyTurn ? '👈 (À toi !)' : ''}
+              {!isNeedsRestock ? `Prochain tour : ${buyerName} (En stock)` : `Tour : ${buyerName} ${isMyTurn ? '👈 (À toi !)' : ''}`}
             </Text>
             {lastPurchase && (
               <Text style={styles.lastPurchase}>

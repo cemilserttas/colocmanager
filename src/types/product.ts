@@ -11,6 +11,7 @@ export interface Product {
   currentTurnIndex: number;
   rotationOrder: string[];
   isActive: boolean;
+  needsRestock?: boolean;
   lastPurchasedAt?: Date | string | null;
   lastPurchasedBy?: string | null;
   createdAt: Date | string;

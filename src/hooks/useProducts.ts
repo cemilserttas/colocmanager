@@ -32,6 +32,8 @@ export function useProducts() {
   const removeProduct = useShoppingStore((state) => state.removeProduct);
   const updateRotationOrder = useShoppingStore((state) => state.updateRotationOrder);
   const markPurchaseComplete = useShoppingStore((state) => state.markPurchaseComplete);
+  const requestRestock = useShoppingStore((state) => state.requestRestock);
+  const requestRestockMultiple = useShoppingStore((state) => state.requestRestockMultiple);
   const getProductHistory = useShoppingStore((state) => state.getProductHistory);
   const subscribeToProducts = useShoppingStore((state) => state.subscribeToProducts);
   const clearError = useShoppingStore((state) => state.clearError);
@@ -142,6 +144,8 @@ export function useProducts() {
     removeProduct,
     updateRotationOrder,
     markPurchaseComplete,
+    requestRestock,
+    requestRestockMultiple,
     getProductHistory,
     getCurrentBuyer,
     getCurrentBuyerMember,

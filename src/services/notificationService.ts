@@ -369,9 +369,10 @@ export const notificationService = {
       const existingNotifs = await notificationService.getNotifications(userId);
       const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
 
-      // 1. Check shopping items where it's currently userId's turn
+      // 1. Check shopping items where it's currently userId's turn and restock is needed
       for (const p of products) {
         if (!p.isActive || !p.rotationOrder || p.rotationOrder.length === 0) continue;
+        if (p.needsRestock === false) continue;
         const currentBuyer = getCurrentAssignee(p.rotationOrder, p.currentTurnIndex ?? 0);
         if (currentBuyer === userId) {
           const hasRecentReminder = existingNotifs.some((n) => {

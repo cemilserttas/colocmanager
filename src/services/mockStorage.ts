@@ -100,6 +100,7 @@ const DEFAULT_PRODUCTS: Product[] = [
     currentTurnIndex: 0, // It's user-me's turn!
     rotationOrder: ['user-me', 'user-marie', 'user-lucas', 'user-sophie'],
     isActive: true,
+    needsRestock: false,
     lastPurchasedAt: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(),
     lastPurchasedBy: 'Sophie',
     createdAt: new Date().toISOString(),
@@ -113,6 +114,7 @@ const DEFAULT_PRODUCTS: Product[] = [
     currentTurnIndex: 1, // Tour de Marie
     rotationOrder: ['user-me', 'user-marie', 'user-lucas', 'user-sophie'],
     isActive: true,
+    needsRestock: false,
     lastPurchasedAt: new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString(),
     lastPurchasedBy: 'Lucas',
     createdAt: new Date().toISOString(),
@@ -126,6 +128,7 @@ const DEFAULT_PRODUCTS: Product[] = [
     currentTurnIndex: 2, // Tour de Lucas
     rotationOrder: ['user-me', 'user-marie', 'user-lucas', 'user-sophie'],
     isActive: true,
+    needsRestock: true,
     createdAt: new Date().toISOString(),
   },
   {
@@ -137,6 +140,7 @@ const DEFAULT_PRODUCTS: Product[] = [
     currentTurnIndex: 3, // Tour de Sophie
     rotationOrder: ['user-me', 'user-marie', 'user-lucas', 'user-sophie'],
     isActive: true,
+    needsRestock: true,
     createdAt: new Date().toISOString(),
   },
 ];

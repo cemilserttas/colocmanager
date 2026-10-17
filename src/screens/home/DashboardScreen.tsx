@@ -133,6 +133,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
 
   const myShoppingTasks = products.filter((p) => {
     if (!p.isActive || !p.rotationOrder || p.rotationOrder.length === 0) return false;
+    if (p.needsRestock === false) return false;
     const currentBuyerId = getCurrentAssignee(p.rotationOrder, p.currentTurnIndex ?? 0);
     return currentBuyerId === user?.uid;
   });

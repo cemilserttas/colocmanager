@@ -64,6 +64,10 @@ export const translations = {
     purchaseError: 'Erreur lors de l\'enregistrement de l\'achat.',
     commentLabel: 'Commentaire / Précision (optionnel)',
     commentPlaceholder: 'Ex: Marque spécifique, format familial, sans gluten...',
+    toBuy: 'À acheter',
+    nextTurn: 'Prochain tour :',
+    signalEmpty: 'Signaler épuisé',
+    allInStockSub: 'Tous les produits partagés sont actuellement en stock ! 🎉',
 
     // Inventory
     inventoryTitle: '📦 Inventaire des Achats',
@@ -303,6 +307,10 @@ export const translations = {
     purchaseError: 'Error recording purchase.',
     commentLabel: 'Comment / Note (optional)',
     commentPlaceholder: 'e.g. Specific brand, family size, gluten free...',
+    toBuy: 'To buy',
+    nextTurn: 'Next turn:',
+    signalEmpty: 'Report empty',
+    allInStockSub: 'All shared items are currently in stock! 🎉',
 
     // Inventory
     inventoryTitle: '📦 Purchases Inventory',

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Product, PurchaseRecord } from '../types';
 import { shoppingService } from '../services/shoppingService';
+import { getNextTurnIndex } from '../utils/rotation';
 
 /**
  * State and action interface for shopping store.
@@ -43,6 +44,24 @@ export interface ShoppingState {
     productId: string,
     buyerUid: string,
     notes?: string
+  ) => Promise<void>;
+
+  /**
+   * Requests restock for a product, marking it as needing purchase and notifying the next buyer.
+   */
+  requestRestock: (
+    productId: string,
+    requestedByUid?: string,
+    senderDisplayName?: string
+  ) => Promise<void>;
+
+  /**
+   * Requests restock for multiple products in batch.
+   */
+  requestRestockMultiple: (
+    productIds: string[],
+    requestedByUid?: string,
+    senderDisplayName?: string
   ) => Promise<void>;
 
   /**
@@ -170,12 +189,13 @@ export const useShoppingStore = create<ShoppingState>((set) => ({
       await shoppingService.markPurchaseComplete(productId, buyerUid, notes);
       set((state) => ({
         products: state.products.map((p) => {
-          if (p.id !== productId) return p;
-          const orderLength = p.rotationOrder?.length || 1;
-          const nextIndex = (p.currentTurnIndex + 1) % orderLength;
+          if (p.id !== productId && p.productId !== productId) return p;
+          const orderLength = p.rotationOrder?.length || 0;
+          const nextIndex = getNextTurnIndex(p.currentTurnIndex ?? 0, orderLength);
           return {
             ...p,
             currentTurnIndex: nextIndex,
+            needsRestock: false, // in stock now!
             lastPurchasedAt: new Date().toISOString(),
             lastPurchasedBy: buyerUid,
           };
@@ -187,6 +207,49 @@ export const useShoppingStore = create<ShoppingState>((set) => ({
       const errorMessage =
         error?.message || "Erreur lors de l'enregistrement de l'achat.";
       set({ error: errorMessage, isLoading: false });
+      throw error;
+    }
+  },
+
+  requestRestock: async (
+    productId: string,
+    requestedByUid?: string,
+    senderDisplayName?: string
+  ) => {
+    try {
+      await shoppingService.requestRestock(productId, requestedByUid, senderDisplayName);
+      set((state) => ({
+        products: state.products.map((p) =>
+          p.id === productId || p.productId === productId ? { ...p, needsRestock: true } : p
+        ),
+      }));
+    } catch (error: any) {
+      const errorMessage =
+        error?.message || 'Erreur lors de la demande de réapprovisionnement.';
+      set({ error: errorMessage });
+      throw error;
+    }
+  },
+
+  requestRestockMultiple: async (
+    productIds: string[],
+    requestedByUid?: string,
+    senderDisplayName?: string
+  ) => {
+    try {
+      await shoppingService.requestRestockMultiple(productIds, requestedByUid, senderDisplayName);
+      const idSet = new Set(productIds);
+      set((state) => ({
+        products: state.products.map((p) =>
+          idSet.has(p.id) || (p.productId && idSet.has(p.productId))
+            ? { ...p, needsRestock: true }
+            : p
+        ),
+      }));
+    } catch (error: any) {
+      const errorMessage =
+        error?.message || 'Erreur lors de la demande de réapprovisionnement.';
+      set({ error: errorMessage });
       throw error;
     }
   },

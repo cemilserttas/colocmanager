@@ -86,6 +86,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
     products = [],
     deleteProduct,
     updateRotationOrder,
+    requestRestock,
     fetchProductHistory,
   } = useShopping();
 
@@ -228,6 +229,20 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
     }
   };
 
+  const handleRequestRestock = async () => {
+    soundService.playPopSound();
+    if (!product) return;
+    try {
+      await requestRestock(product.id, user?.displayName || undefined);
+      soundService.playSuccessSound();
+      setSnackbarMessage(t('restockSuccess') || `Demande de rachat envoyée pour "${product.name}" !`);
+      setSnackbarVisible(true);
+    } catch {
+      setSnackbarMessage(t('purchaseError') || "Erreur lors de la demande de réapprovisionnement.");
+      setSnackbarVisible(true);
+    }
+  };
+
   if (!product) {
     return (
       <View style={[styles.notFoundContainer, { backgroundColor: tokens.bg }]}>
@@ -252,6 +267,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
     rotationList.length > 0
       ? (((product.currentTurnIndex ?? 0) % rotationList.length) + rotationList.length) % rotationList.length
       : 0;
+  const isInStock = product.needsRestock === false;
 
   return (
     <View style={[styles.container, { backgroundColor: tokens.bg }]}>
@@ -301,9 +317,37 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
                 💬 {product.comment}
               </Text>
             ) : null}
-            <Chip style={[styles.rotationChip, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.16)' : '#ECFDF5' }]} textStyle={{ color: '#10B981', fontWeight: '700' }}>
-              🔄 {rotationList.length} {t('members').toLowerCase()}
-            </Chip>
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+              <Chip
+                style={{
+                  backgroundColor: isInStock
+                    ? (isDark ? 'rgba(16, 185, 129, 0.16)' : '#ECFDF5')
+                    : (isDark ? 'rgba(239, 68, 68, 0.16)' : '#FEF2F2'),
+                  borderRadius: 16,
+                }}
+                textStyle={{
+                  color: isInStock ? '#10B981' : '#EF4444',
+                  fontWeight: '700',
+                }}
+              >
+                {isInStock ? `✓ ${t('inStock') || 'En stock'}` : `⚠️ ${t('toBuy') || 'À acheter'}`}
+              </Chip>
+              <Chip style={[styles.rotationChip, { backgroundColor: isDark ? 'rgba(10, 132, 255, 0.16)' : '#EFF6FF' }]} textStyle={{ color: tokens.primary, fontWeight: '700' }}>
+                🔄 {rotationList.length} {t('members').toLowerCase()}
+              </Chip>
+            </View>
+
+            {isInStock && (
+              <Button
+                mode="outlined"
+                textColor="#EF4444"
+                onPress={handleRequestRestock}
+                style={{ marginTop: 12, borderRadius: 18, borderColor: 'rgba(239, 68, 68, 0.35)' }}
+                labelStyle={{ fontWeight: '800', fontSize: 12 }}
+              >
+                📢 {t('requestRestockBtn') || "Informer qu'il faut en racheter"}
+              </Button>
+            )}
           </View>
 
           {/* Rotation Order Section */}
@@ -364,12 +408,14 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
                         {memberName} {isSelf ? '(Vous)' : ''}
                       </Text>
                       {isCurrent && (
-                        <Text variant="labelSmall" style={styles.currentTurnBadge}>
-                          {t('theirTurnToBuy')}
+                        <Text variant="labelSmall" style={[styles.currentTurnBadge, isInStock && { color: tokens.textSecondary }]}>
+                          {isInStock
+                            ? (t('nextTurn') || "Prochain tour d'achat")
+                            : t('theirTurnToBuy')}
                         </Text>
                       )}
                     </View>
-                    {isCurrent && !isSelf && (
+                    {isCurrent && !isSelf && !isInStock && (
                       <TouchableOpacity
                         activeOpacity={0.7}
                         onPress={() => handleSendReminder(uid, memberName)}

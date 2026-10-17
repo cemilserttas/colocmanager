@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -12,6 +12,7 @@ import {
   FAB,
   Snackbar,
   ActivityIndicator,
+  Chip,
 } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../hooks/useAuth';
@@ -55,8 +56,8 @@ interface ShoppingListScreenProps {
 }
 
 /**
- * Shopping list screen displaying all recurring shared flat items,
- * rotation indicators, and turn execution triggers.
+ * Shopping list screen displaying recurring shared flat items,
+ * rotation indicators, in-stock status, and turn execution triggers.
  */
 export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -72,13 +73,30 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
     loading,
     error: shoppingError,
     markAsPurchased,
+    requestRestock,
     fetchProducts,
   } = useShopping();
 
+  const [filter, setFilter] = useState<'toBuy' | 'inStock' | 'all'>('toBuy');
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
+
+  const toBuyProducts = useMemo(
+    () => products.filter((p) => p.isActive !== false && p.needsRestock !== false),
+    [products]
+  );
+  const inStockProducts = useMemo(
+    () => products.filter((p) => p.isActive !== false && p.needsRestock === false),
+    [products]
+  );
+
+  const displayedProducts = useMemo(() => {
+    if (filter === 'toBuy') return toBuyProducts;
+    if (filter === 'inStock') return inStockProducts;
+    return products.filter((p) => p.isActive !== false);
+  }, [products, filter, toBuyProducts, inStockProducts]);
 
   const isAdmin =
     Boolean(user?.uid) &&
@@ -110,7 +128,7 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
       soundService.playPurchaseSound();
       setSnackbarMessage(
         t('purchaseSuccess', { name: productName }) ||
-          `✓ Achat validé pour "${productName}" ! Le tour passe au colocataire suivant.`
+          `✓ Achat validé pour "${productName}" ! Le produit est désormais en stock.`
       );
       setSnackbarVisible(true);
     } catch (err: unknown) {
@@ -126,16 +144,41 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
   };
 
   /**
-   * Renders an individual product card.
+   * Dispatches request-restock for an in-stock product with sound and notification.
    */
+  const handleRequestRestock = async (productId: string, productName: string) => {
+    soundService.playPopSound();
+    setActionLoadingId(productId);
+    try {
+      await requestRestock(productId, user?.displayName || undefined);
+      soundService.playSuccessSound();
+      setSnackbarMessage(
+        t('restockSuccess') || `Demande de rachat envoyée pour "${productName}" !`
+      );
+      setSnackbarVisible(true);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : t('purchaseError') || "Erreur lors de la demande de réapprovisionnement.";
+      setSnackbarMessage(message);
+      setSnackbarVisible(true);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   /**
-   * Renders an individual product card.
+   * Renders an individual product card with stock status.
    */
   const renderProductItem = ({ item }: { item: Product }) => {
     const rotationList = item.rotationOrder || [];
     const currentBuyerUid = getCurrentAssignee(rotationList, item.currentTurnIndex ?? 0) || null;
+    const isInStock = item.needsRestock === false;
 
     const isMyTurn = currentBuyerUid === user?.uid;
+    const isMyTurnToBuy = isMyTurn && !isInStock;
+
     const currentBuyerName = currentBuyerUid
       ? isMyTurn
         ? (t('yourTurn') || 'À toi !')
@@ -160,10 +203,14 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
           style={[
             styles.productCard,
             {
-              backgroundColor: isMyTurn
+              backgroundColor: isMyTurnToBuy
                 ? isDark ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.08)'
                 : tokens.card,
-              borderColor: isMyTurn ? '#10B981' : tokens.border,
+              borderColor: isMyTurnToBuy
+                ? '#10B981'
+                : !isInStock
+                ? (isDark ? 'rgba(239, 68, 68, 0.35)' : 'rgba(239, 68, 68, 0.25)')
+                : tokens.border,
             },
           ]}
         >
@@ -172,9 +219,29 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
               <Text style={styles.productIcon}>{item.icon || '🛒'}</Text>
             </View>
             <View style={styles.titleArea}>
-              <Text variant="titleMedium" style={[styles.productName, { color: tokens.text }]}>
-                {item.name}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 4 }}>
+                <Text variant="titleMedium" style={[styles.productName, { color: tokens.text, flex: 1, marginRight: 6 }]}>
+                  {item.name}
+                </Text>
+                <Chip
+                  compact
+                  style={{
+                    backgroundColor: isInStock
+                      ? (isDark ? 'rgba(16, 185, 129, 0.16)' : '#ECFDF5')
+                      : (isDark ? 'rgba(239, 68, 68, 0.16)' : '#FEF2F2'),
+                    borderRadius: 12,
+                    height: 22,
+                  }}
+                  textStyle={{
+                    color: isInStock ? '#10B981' : '#EF4444',
+                    fontWeight: '800',
+                    fontSize: 10,
+                  }}
+                >
+                  {isInStock ? `✓ ${t('inStock') || 'En stock'}` : `⚠️ ${t('toBuy') || 'À acheter'}`}
+                </Chip>
+              </View>
+
               {item.comment ? (
                 <Text
                   variant="bodySmall"
@@ -184,18 +251,22 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
                   💬 {item.comment}
                 </Text>
               ) : null}
+
               <Text
                 variant="bodyMedium"
-                style={[styles.turnText, { color: isMyTurn ? '#10B981' : tokens.textSecondary }]}
+                style={[
+                  styles.turnText,
+                  { color: isMyTurnToBuy ? '#10B981' : tokens.textSecondary },
+                ]}
               >
-                {t('turnLabel') || 'Tour :'}{' '}
-                <Text style={{ fontWeight: '800', color: isMyTurn ? '#10B981' : tokens.text }}>
-                  {currentBuyerName} {isMyTurn ? '👈' : ''}
+                {isInStock ? (t('nextTurn') || 'Prochain tour :') : (t('turnLabel') || 'Tour :')}{' '}
+                <Text style={{ fontWeight: '800', color: isMyTurnToBuy ? '#10B981' : tokens.text }}>
+                  {currentBuyerName} {isMyTurnToBuy ? '👈' : ''}
                 </Text>
               </Text>
             </View>
 
-            {isMyTurn && (
+            {isMyTurnToBuy && (
               <Button
                 mode="contained"
                 buttonColor="#10B981"
@@ -206,6 +277,21 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
                 labelStyle={styles.boughtButtonLabel}
               >
                 {t('bought') || 'ACHETÉ ✓'}
+              </Button>
+            )}
+
+            {isInStock && (
+              <Button
+                mode="outlined"
+                textColor="#EF4444"
+                loading={isActionRunning}
+                disabled={isActionRunning}
+                onPress={() => handleRequestRestock(item.id, item.name)}
+                style={[styles.boughtButton, { borderColor: 'rgba(239, 68, 68, 0.35)', borderRadius: 14 }]}
+                labelStyle={{ fontSize: 11, fontWeight: '800' }}
+                compact
+              >
+                {t('signalEmpty') || 'Épuisé'}
               </Button>
             )}
           </View>
@@ -239,9 +325,74 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
           </View>
         )}
 
+        {/* Filter Chips: À acheter / En stock / Tous */}
+        {products.length > 0 && (
+          <View style={styles.filterChipsRow}>
+            <Chip
+              selected={filter === 'toBuy'}
+              onPress={() => {
+                soundService.playPopSound();
+                setFilter('toBuy');
+              }}
+              style={[
+                styles.filterChip,
+                filter === 'toBuy' && { backgroundColor: tokens.primary },
+              ]}
+              textStyle={{
+                color: filter === 'toBuy' ? '#FFFFFF' : tokens.text,
+                fontWeight: '700',
+                fontSize: 12,
+              }}
+              compact
+            >
+              {t('toBuy') || 'À acheter'} ({toBuyProducts.length})
+            </Chip>
+
+            <Chip
+              selected={filter === 'inStock'}
+              onPress={() => {
+                soundService.playPopSound();
+                setFilter('inStock');
+              }}
+              style={[
+                styles.filterChip,
+                filter === 'inStock' && { backgroundColor: tokens.primary },
+              ]}
+              textStyle={{
+                color: filter === 'inStock' ? '#FFFFFF' : tokens.text,
+                fontWeight: '700',
+                fontSize: 12,
+              }}
+              compact
+            >
+              {t('inStock') || 'En stock'} ({inStockProducts.length})
+            </Chip>
+
+            <Chip
+              selected={filter === 'all'}
+              onPress={() => {
+                soundService.playPopSound();
+                setFilter('all');
+              }}
+              style={[
+                styles.filterChip,
+                filter === 'all' && { backgroundColor: tokens.primary },
+              ]}
+              textStyle={{
+                color: filter === 'all' ? '#FFFFFF' : tokens.text,
+                fontWeight: '700',
+                fontSize: 12,
+              }}
+              compact
+            >
+              {isEn ? 'All' : 'Tous'} ({products.length})
+            </Chip>
+          </View>
+        )}
+
         {/* Product FlatList */}
         <FlatList
-          data={products}
+          data={displayedProducts}
           keyExtractor={(item) => item.id}
           renderItem={renderProductItem}
           contentContainerStyle={[styles.listContainer, { paddingBottom: 160 + insets.bottom }]}
@@ -258,6 +409,27 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
           ListEmptyComponent={
             loading && !refreshing ? (
               <ActivityIndicator style={styles.centered} size="large" color={tokens.accent} />
+            ) : filter === 'toBuy' && inStockProducts.length > 0 ? (
+              <View style={[styles.emptyCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+                <Text style={styles.emptyIcon}>🎉</Text>
+                <Text variant="titleMedium" style={[styles.emptyTitle, { color: tokens.text }]}>
+                  {t('inStock') || 'En stock'}
+                </Text>
+                <Text variant="bodySmall" style={[styles.emptySubtitle, { color: tokens.textSecondary }]}>
+                  {t('allInStockSub') || 'Tous les produits partagés sont actuellement en stock ! 🎉'}
+                </Text>
+                <Button
+                  mode="outlined"
+                  textColor={tokens.primary}
+                  style={{ marginTop: spacing.md, borderRadius: 20 }}
+                  onPress={() => {
+                    soundService.playPopSound();
+                    setFilter('inStock');
+                  }}
+                >
+                  {t('inStock') || 'En stock'} ({inStockProducts.length})
+                </Button>
+              </View>
             ) : (
               <View style={[styles.emptyCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
                 <Text style={styles.emptyIcon}>🛒</Text>
@@ -354,6 +526,18 @@ const styles = StyleSheet.create({
   adminBarSub: {
     fontSize: 12,
     marginTop: 2,
+  },
+  filterChipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  filterChip: {
+    borderRadius: 16,
+    height: 32,
   },
   addBtnTop: {
     borderRadius: 16,
