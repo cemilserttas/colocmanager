@@ -7,8 +7,77 @@
     <title>ColocManager — Gestion de Colocation</title>
     <meta name="description" content="Gestion des achats et du nettoyage équitable en colocation" />
     <meta name="theme-color" content="#4F46E5" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="ColocManager" />
+    <meta name="application-name" content="ColocManager" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <!-- Web App Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- iOS Home Screen Icons -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icon.png" />
+    <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png" />
+
+    <!-- Standard Favicons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/icon.png" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+
+    <!-- Prevent iOS Standalone PWA from opening internal links in Safari / Safari View Controller -->
+    <script>
+      (function() {
+        var isStandalone = (('standalone' in window.navigator) && window.navigator.standalone) ||
+          (typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches);
+
+        if (isStandalone) {
+          document.addEventListener('click', function(e) {
+            var node = e.target;
+            while (node && node.nodeName !== 'A' && node.nodeName !== 'HTML') {
+              node = node.parentNode;
+            }
+            if (node && node.nodeName === 'A' && node.href) {
+              var href = node.getAttribute('href');
+              if (!href) return;
+              var isExternal = /^https?:\/\//i.test(href) && node.origin !== window.location.origin;
+              var isSpecial = /^(mailto:|tel:|sms:|javascript:)/i.test(href);
+
+              if (!isExternal && !isSpecial && href !== '#' && !node.getAttribute('target')) {
+                e.preventDefault();
+                var targetPath = node.pathname + (node.search || '') + (node.hash || '');
+                if (window.location.pathname + window.location.search + window.location.hash !== targetPath) {
+                  if (window.history && window.history.pushState) {
+                    window.history.pushState(null, '', targetPath);
+                    window.dispatchEvent(new PopStateEvent('popstate'));
+                  } else {
+                    window.location.href = node.href;
+                  }
+                }
+              }
+            }
+          }, false);
+        }
+      })();
+    </script>
+
+    <!-- Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(
+            function(registration) {
+              console.log('ServiceWorker registration successful with scope: ', registration.scope);
+            },
+            function(err) {
+              console.log('ServiceWorker registration failed: ', err);
+            }
+          );
+        });
+      }
+    </script>
 
     <!-- MaterialCommunityIcons font definition for React Native Paper & @expo/vector-icons -->
     <style id="material-community-icons-font">

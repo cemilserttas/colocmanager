@@ -5,7 +5,9 @@ import {
   ScrollView,
   RefreshControl,
   TouchableOpacity,
+  Platform,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Text,
   Button,
@@ -25,6 +27,7 @@ import { useLanguageStore } from '../../store/useLanguageStore';
 import { soundService } from '../../services/soundService';
 import { notificationService } from '../../services/notificationService';
 import { NotificationBell } from '../../components/common/NotificationBell';
+import { PwaGuidanceBanner } from '../../components/common/PwaGuidanceBanner';
 import { GroupMember, SystemBroadcast } from '../../types';
 import { adminService } from '../../services/adminService';
 import { getCurrentAssignee } from '../../utils/rotation';
@@ -317,6 +320,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
                 </View>
               );
             })}
+
+            {/* PWA Standalone Mode Guidance Banner (iOS / Mobile Web) */}
+            <PwaGuidanceBanner />
 
             {/* Admin or Member Role Banner */}
             <View style={styles.roleBannerRow}>
@@ -740,6 +746,17 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1.5,
     marginTop: 10,
+  },
+  pwaBanner: {
+    borderWidth: 1.5,
+    borderRadius: 16,
+    padding: 12,
+    marginTop: 10,
+  },
+  pwaBannerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   hubActionCard: {
     flex: 1,

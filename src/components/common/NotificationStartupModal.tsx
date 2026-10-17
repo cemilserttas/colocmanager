@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { Portal, Dialog, Button, Text } from 'react-native-paper';
 import { useNotificationPreferences } from '../../store/useNotificationPreferences';
 import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
@@ -46,6 +46,13 @@ export const NotificationStartupModal: React.FC = () => {
     setVisible(false);
   };
 
+  const isStandalone =
+    Platform.OS === 'web' &&
+    typeof window !== 'undefined' &&
+    ((window.navigator as any)?.standalone === true ||
+      (typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches));
+  const isBrowserTab = Platform.OS === 'web' && !isStandalone;
+
   if (!user || !group || !visible) return null;
 
   return (
@@ -77,6 +84,34 @@ export const NotificationStartupModal: React.FC = () => {
             Recevez une alerte discrète dès que c'est votre tour de faire les courses, de
             nettoyer une pièce, ou lors de nouveautés ajoutées par l'administrateur.
           </Text>
+
+          {isBrowserTab && (
+            <View
+              style={[
+                styles.pwaNoticeBox,
+                {
+                  backgroundColor: isDark ? 'rgba(79, 70, 229, 0.16)' : '#EEF2FF',
+                  borderColor: tokens.primary,
+                },
+              ]}
+            >
+              <Text
+                variant="labelSmall"
+                style={{ color: tokens.primary, fontWeight: '800', marginBottom: 2 }}
+              >
+                📲 Mode Application Web :
+              </Text>
+              <Text
+                variant="bodySmall"
+                style={{ color: tokens.text, lineHeight: 17, fontSize: 12 }}
+              >
+                Pour utiliser ColocManager comme une application (sans barre de navigateur) et
+                recevoir les notifications sur votre écran de verrouillage : touchez Partager 📤
+                (ou la boussole 🧭) puis "Sur l'écran d'accueil".
+              </Text>
+            </View>
+          )}
+
           <Text
             variant="bodySmall"
             style={{ color: tokens.textTertiary, textAlign: 'center', marginTop: 8 }}
@@ -149,6 +184,13 @@ const styles = StyleSheet.create({
   buttonEnable: {
     flex: 1.2,
     borderRadius: 16,
+  },
+  pwaNoticeBox: {
+    marginTop: 12,
+    marginBottom: 4,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
   },
 });
 

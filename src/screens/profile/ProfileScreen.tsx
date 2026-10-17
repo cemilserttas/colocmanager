@@ -17,11 +17,14 @@ import {
   Snackbar,
   Divider,
   SegmentedButtons,
+  Chip,
 } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import { useAuth } from '../../hooks/useAuth';
 import { useGroup } from '../../hooks/useGroup';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { PWA_BANNER_DISMISSED_KEY } from '../../components/common/PwaGuidanceBanner';
 import { useThemeStore, getLiquidGlassTokens, ThemePreference } from '../../store/useThemeStore';
 import { useLanguageStore } from '../../store/useLanguageStore';
 import { useNotificationPreferences } from '../../store/useNotificationPreferences';
@@ -80,6 +83,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   // Feedback states
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [pwaGuideVisible, setPwaGuideVisible] = useState(false);
+
+  const isWebStandalone =
+    Platform.OS === 'web' &&
+    typeof window !== 'undefined' &&
+    ((window.navigator as any)?.standalone === true ||
+      (typeof window.matchMedia === 'function' &&
+        window.matchMedia('(display-mode: standalone)').matches));
 
   const isAdmin =
     Boolean(user?.uid) &&
@@ -104,46 +115,33 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
       soundService.playNotificationSound();
       let triggered = false;
 
-      // 1. Web Notification
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
+      // 1. Web / PWA Notification
+      if (Platform.OS === 'web') {
         try {
-          if (Notification.permission === 'granted') {
-            new Notification('🔔 Notifications ColocManager activées !', {
-              body: "Tu recevras un rappel direct quand c'est ton tour d'acheter ou de nettoyer !",
-              icon: '/favicon.ico',
-            });
-            triggered = true;
-          } else if (Notification.permission !== 'denied') {
-            const perm = await Notification.requestPermission();
-            if (perm === 'granted') {
-              new Notification('🔔 Notifications ColocManager activées !', {
+          await notificationService.showSystemNotification(
+            '🔔 Notifications ColocManager activées !',
+            "Tu recevras un rappel direct quand c'est ton tour d'acheter ou de nettoyer !"
+          );
+        } catch {
+          // Ignore
+        }
+      } else {
+        // 2. Native Expo Notification
+        try {
+          const { status } = await Notifications.requestPermissionsAsync();
+          if (status === 'granted') {
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: '🔔 Notifications ColocManager activées !',
                 body: "Tu recevras un rappel direct quand c'est ton tour d'acheter ou de nettoyer !",
-                icon: '/favicon.ico',
-              });
-              triggered = true;
-            }
+                sound: true,
+              },
+              trigger: null,
+            });
           }
         } catch {
           // Ignore
         }
-      }
-
-      // 2. Native Expo Notification
-      try {
-        const { status } = await Notifications.requestPermissionsAsync();
-        if (status === 'granted') {
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: '🔔 Notifications ColocManager activées !',
-              body: "Tu recevras un rappel direct quand c'est ton tour d'acheter ou de nettoyer !",
-              sound: true,
-            },
-            trigger: null,
-          });
-          triggered = true;
-        }
-      } catch {
-        // Ignore
       }
 
       setSnackbarMessage(t('notificationsEnabledMsg'));
@@ -543,6 +541,85 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
             )}
           </View>
 
+          {/* Section: Mode Application Web (PWA) */}
+          {Platform.OS === 'web' && (
+            <View style={[styles.sectionCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+              <Text style={[styles.sectionHeaderTitle, { color: tokens.textSecondary }]}>
+                APPLICATION WEB & PWA
+              </Text>
+
+              <View style={styles.settingRow}>
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 18, marginRight: 8 }}>📲</Text>
+                    <Text style={[styles.settingTitle, { color: tokens.text }]}>
+                      {isWebStandalone ? 'Application Autonome (PWA)' : 'Navigateur Safari / Web'}
+                    </Text>
+                  </View>
+                  <Text style={[styles.settingSub, { color: isWebStandalone ? tokens.success : tokens.textSecondary }]}>
+                    {isWebStandalone
+                      ? '✓ Actif : ColocManager s\'exécute en plein écran sans barre d\'adresse ni barre de navigation.'
+                      : 'Actuellement dans un onglet web. Ajoutez ColocManager à votre écran d\'accueil pour masquer les barres Safari.'}
+                  </Text>
+                </View>
+                <Chip
+                  style={{
+                    backgroundColor: isWebStandalone
+                      ? 'rgba(16, 185, 129, 0.15)'
+                      : 'rgba(79, 70, 229, 0.15)',
+                  }}
+                  textStyle={{
+                    color: isWebStandalone ? '#10B981' : tokens.primary,
+                    fontWeight: '700',
+                    fontSize: 11,
+                  }}
+                  compact
+                >
+                  {isWebStandalone ? 'Plein écran' : 'Onglet Web'}
+                </Chip>
+              </View>
+
+              {!isWebStandalone && (
+                <>
+                  <Divider style={{ backgroundColor: tokens.borderSubtle, marginHorizontal: 16 }} />
+                  <TouchableOpacity
+                    onPress={() => {
+                      soundService.playPopSound();
+                      setPwaGuideVisible(true);
+                    }}
+                    style={styles.actionListItem}
+                  >
+                    <Text style={{ fontSize: 18, marginRight: 10 }}>💡</Text>
+                    <Text style={[styles.actionListText, { color: tokens.primary, fontWeight: '700' }]}>
+                      Comment passer en application plein écran ?
+                    </Text>
+                    <Text style={{ color: tokens.primary, fontSize: 18 }}>›</Text>
+                  </TouchableOpacity>
+
+                  <Divider style={{ backgroundColor: tokens.borderSubtle, marginHorizontal: 16 }} />
+                  <TouchableOpacity
+                    onPress={async () => {
+                      soundService.playPopSound();
+                      try {
+                        await AsyncStorage.removeItem(PWA_BANNER_DISMISSED_KEY);
+                        setSnackbarMessage('Bandeau d\'installation réactivé sur l\'accueil.');
+                        setSnackbarVisible(true);
+                      } catch {
+                        // ignore
+                      }
+                    }}
+                    style={styles.actionListItem}
+                  >
+                    <Text style={{ fontSize: 18, marginRight: 10 }}>🔄</Text>
+                    <Text style={[styles.actionListText, { color: tokens.textSecondary, fontSize: 13 }]}>
+                      Réafficher le bandeau d'installation sur l'accueil
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          )}
+
           {/* Section: Compte & Colocation Actions */}
           <View style={[styles.sectionCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
             <Text style={[styles.sectionHeaderTitle, { color: tokens.textSecondary }]}>
@@ -734,6 +811,67 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
               loading={loggingOut}
             >
               Déconnexion
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        {/* PWA Mode Explanation Dialog */}
+        <Dialog
+          visible={pwaGuideVisible}
+          onDismiss={() => setPwaGuideVisible(false)}
+          style={{
+            backgroundColor: isDark ? '#141624' : '#FFFFFF',
+            borderRadius: 24,
+            borderColor: tokens.border,
+            borderWidth: 1,
+            maxWidth: 480,
+            alignSelf: 'center',
+            width: '92%',
+          }}
+        >
+          <Dialog.Title style={{ color: tokens.text, fontWeight: '800', textAlign: 'center' }}>
+            📲 Mode Application Web
+          </Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodyMedium" style={{ color: tokens.textSecondary, marginBottom: 12 }}>
+              Pour exécuter ColocManager en véritable application (plein écran sans barres Safari) et recevoir les alertes push sur votre écran verrouillé :
+            </Text>
+
+            <View style={{ marginBottom: 10 }}>
+              <Text style={{ color: tokens.text, fontWeight: '700', fontSize: 14 }}>
+                1. Ouvrez dans Safari
+              </Text>
+              <Text style={{ color: tokens.textSecondary, fontSize: 13, marginTop: 2 }}>
+                Si vous êtes dans une vue intégrée, touchez la boussole 🧭 en bas à droite pour ouvrir Safari.
+              </Text>
+            </View>
+
+            <View style={{ marginBottom: 10 }}>
+              <Text style={{ color: tokens.text, fontWeight: '700', fontSize: 14 }}>
+                2. Touchez le bouton Partager 📤
+              </Text>
+              <Text style={{ color: tokens.textSecondary, fontSize: 13, marginTop: 2 }}>
+                Dans la barre du bas de Safari, appuyez sur l'icône de partage (carré avec flèche vers le haut).
+              </Text>
+            </View>
+
+            <View style={{ marginBottom: 10 }}>
+              <Text style={{ color: tokens.text, fontWeight: '700', fontSize: 14 }}>
+                3. Choisissez "Sur l'écran d'accueil" 📲
+              </Text>
+              <Text style={{ color: tokens.textSecondary, fontSize: 13, marginTop: 2 }}>
+                Faites défiler le menu puis validez "Ajouter". Lancez ensuite l'application depuis cette nouvelle icône !
+              </Text>
+            </View>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button
+              mode="contained"
+              onPress={() => setPwaGuideVisible(false)}
+              buttonColor={tokens.primary}
+              textColor="#FFFFFF"
+            >
+              Compris !
             </Button>
           </Dialog.Actions>
         </Dialog>

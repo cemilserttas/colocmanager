@@ -21,9 +21,10 @@ import { useShopping } from '../../hooks/useShopping';
 import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
 import { useLanguageStore } from '../../store/useLanguageStore';
 import { soundService } from '../../services/soundService';
-import { colors, spacing, borderRadius } from '../../constants/theme';
 import { Product, GroupMember } from '../../types';
 import { getCurrentAssignee } from '../../utils/rotation';
+import { spacing } from '../../constants/theme';
+import { PwaGuidanceBanner } from '../../components/common/PwaGuidanceBanner';
 
 /**
  * Resolves a user ID to a member display name.
@@ -382,6 +383,9 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
             </View>
           </View>
         )}
+
+        {/* PWA Guidance Banner */}
+        <PwaGuidanceBanner compact />
 
         {/* Filter Chips: À acheter / En stock / Tous */}
         {products.length > 0 && (

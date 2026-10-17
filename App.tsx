@@ -94,6 +94,18 @@ export default function App() {
       // Ignore in environments without native notification support
     }
 
+    // Register PWA service worker on web
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .register('/sw.js', { scope: '/' })
+        .then((reg) => {
+          console.log('PWA ServiceWorker registered with scope:', reg.scope);
+        })
+        .catch((err) => {
+          console.warn('PWA ServiceWorker registration error:', err);
+        });
+    }
+
     // Ensure MaterialCommunityIcons font-face is active on web
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       const fontId = 'material-community-icons-style';

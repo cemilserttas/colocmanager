@@ -251,18 +251,9 @@ export function useNotifications() {
               const title = translateNotificationTitle(cleanTitle, isEn);
               const body = translateNotificationBody(cleanBody, isEn);
 
-              Notifications.scheduleNotificationAsync({
-                content: {
-                  title,
-                  body,
-                  sound: true,
-                  priority: Notifications.AndroidNotificationPriority.MAX,
-                  vibrate: [0, 250, 250, 250],
-                },
-                trigger: {
-                  channelId: 'default',
-                },
-              }).catch((e) => console.warn('Push dispatch error:', e));
+              notificationService
+                .showSystemNotification(title, body, { notifId: notif.id })
+                .catch((e) => console.warn('Push dispatch error:', e));
             }
           }
         });

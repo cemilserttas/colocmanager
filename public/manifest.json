@@ -1,0 +1,38 @@
+{
+  "id": "/",
+  "name": "ColocManager — Colocation",
+  "short_name": "ColocManager",
+  "description": "Gestion des achats et du nettoyage équitable en colocation",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "window-controls-overlay", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#0F172A",
+  "theme_color": "#4F46E5",
+  "categories": ["lifestyle", "utilities"],
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/icon.png",
+      "sizes": "192x192 512x512 1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180 512x512 1024x1024",
+      "type": "image/png"
+    }
+  ]
+}

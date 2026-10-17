@@ -71,6 +71,17 @@ export const notificationService = {
    */
   async requestPermissions(): Promise<boolean> {
     try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
+        if (Notification.permission === 'granted') {
+          return true;
+        }
+        if (Notification.permission !== 'denied') {
+          const res = await Notification.requestPermission();
+          return res === 'granted';
+        }
+        return false;
+      }
+
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
 
@@ -198,12 +209,75 @@ export const notificationService = {
    * @param seconds - Delay in seconds before triggering
    * @returns Notification ID string
    */
+  /**
+   * Dispatches an immediate system notification across both native (Expo)
+   * and Web / PWA environments (ServiceWorker / Web Notifications API).
+   */
+  async showSystemNotification(title: string, body: string, data?: any): Promise<void> {
+    try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          if ('serviceWorker' in navigator) {
+            try {
+              const reg = await navigator.serviceWorker.ready;
+              if (reg && typeof reg.showNotification === 'function') {
+                await reg.showNotification(title, {
+                  body,
+                  icon: '/icon.png',
+                  badge: '/icon.png',
+                  data,
+                });
+                return;
+              }
+            } catch {
+              // Fallback to new Notification
+            }
+          }
+          try {
+            new Notification(title, {
+              body,
+              icon: '/icon.png',
+            });
+            return;
+          } catch {
+            // Ignore
+          }
+        }
+        // Web execution terminates here to avoid calling unsupported native Expo Notifications API on web
+        return;
+      }
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          sound: true,
+          priority: Notifications.AndroidNotificationPriority.MAX,
+          vibrate: [0, 250, 250, 250],
+          data,
+        },
+        trigger: {
+          channelId: 'default',
+        },
+      });
+    } catch (e) {
+      console.warn('System notification dispatch error:', e);
+    }
+  },
+
   async scheduleLocalNotification(
     title: string,
     body: string,
     seconds: number
   ): Promise<string> {
     try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        setTimeout(() => {
+          notificationService.showSystemNotification(title, body);
+        }, Math.max(1, seconds) * 1000);
+        return `web-local-${Date.now()}`;
+      }
+
       const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
           title,
