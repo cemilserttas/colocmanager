@@ -7,23 +7,32 @@ self.addEventListener('activate', function(event) {
 });
 
 self.addEventListener('push', function(event) {
+  let title = 'ColocManager';
+  let body = 'Nouvelle notification de votre colocation.';
+  let data = {};
+
   if (event.data) {
-    let data = {};
     try {
-      data = event.data.json();
+      const parsed = event.data.json();
+      title = parsed.title || title;
+      body = parsed.body || body;
+      data = parsed.data || {};
     } catch (e) {
-      data = { body: event.data.text() };
+      body = event.data.text() || body;
     }
-    const title = data.title || 'ColocManager';
-    const options = {
-      body: data.body || '',
-      icon: '/icon.png',
-      badge: '/icon.png',
-      data: data.data || {},
-      vibrate: [200, 100, 200]
-    };
-    event.waitUntil(self.registration.showNotification(title, options));
   }
+
+  const options = {
+    body: body,
+    icon: '/icon.png',
+    badge: '/icon.png',
+    data: data,
+    vibrate: [200, 100, 200],
+    tag: 'colocmanager-' + Date.now(),
+    renotify: true
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener('notificationclick', function(event) {
@@ -35,6 +44,7 @@ self.addEventListener('notificationclick', function(event) {
         for (let i = 0; i < clientList.length; i++) {
           if (clientList[i].focused) {
             client = clientList[i];
+            break;
           }
         }
         return client.focus();

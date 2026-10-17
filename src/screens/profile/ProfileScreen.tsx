@@ -113,7 +113,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 
     if (enabled) {
       soundService.playNotificationSound();
-      let triggered = false;
+      if (user?.uid) {
+        notificationService.registerForPushNotifications(user.uid).catch(() => {});
+        notificationService.registerWebPushSubscription(user.uid).catch(() => {});
+      }
 
       // 1. Web / PWA Notification
       if (Platform.OS === 'web') {
@@ -578,6 +581,56 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                   {isWebStandalone ? 'Plein écran' : 'Onglet Web'}
                 </Chip>
               </View>
+
+              <Divider style={{ backgroundColor: tokens.borderSubtle, marginHorizontal: 16 }} />
+
+              {/* Closed-app push notification test */}
+              <TouchableOpacity
+                onPress={async () => {
+                  soundService.playPopSound();
+                  setSnackbarMessage("⏳ Programmée dans 5s ! Fermez l'application ou verrouillez votre téléphone MAINTENANT.");
+                  setSnackbarVisible(true);
+                  const ok = await notificationService.testClosedAppWebPush(user?.uid, 5);
+                  if (!ok) {
+                    setSnackbarMessage("Veuillez autoriser les notifications dans votre navigateur pour recevoir les alertes.");
+                    setSnackbarVisible(true);
+                  }
+                }}
+                style={styles.actionListItem}
+              >
+                <Text style={{ fontSize: 18, marginRight: 10 }}>⏳</Text>
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={[styles.actionListText, { color: tokens.primary, fontWeight: '700' }]}>
+                    Tester avec l'application fermée (dans 5s)
+                  </Text>
+                  <Text style={[styles.settingSub, { color: tokens.textSecondary, marginTop: 2, fontSize: 12 }]}>
+                    Appuyez, puis fermez l'app ou verrouillez l'écran pour tester la réception
+                  </Text>
+                </View>
+                <Text style={{ color: tokens.primary, fontSize: 18 }}>›</Text>
+              </TouchableOpacity>
+
+              <Divider style={{ backgroundColor: tokens.borderSubtle, marginHorizontal: 16 }} />
+
+              {/* Immediate notification test */}
+              <TouchableOpacity
+                onPress={async () => {
+                  soundService.playPopSound();
+                  await notificationService.showSystemNotification(
+                    'ColocManager 🔔',
+                    'Test réussi : votre téléphone reçoit bien les notifications de la colocation !'
+                  );
+                  setSnackbarMessage('Notification système immédiate envoyée !');
+                  setSnackbarVisible(true);
+                }}
+                style={styles.actionListItem}
+              >
+                <Text style={{ fontSize: 18, marginRight: 10 }}>📲</Text>
+                <Text style={[styles.actionListText, { color: tokens.text, fontWeight: '600' }]}>
+                  Tester une notification immédiate
+                </Text>
+                <Text style={{ color: tokens.textSecondary, fontSize: 18 }}>›</Text>
+              </TouchableOpacity>
 
               {!isWebStandalone && (
                 <>

@@ -36,7 +36,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!assets/|_expo/|manifest\\.json|sw\\.js|favicon\\.ico|icon\\.png|apple-touch-icon\\.png).*)",
+      "source": "/((?!api/|assets/|_expo/|manifest\\.json|sw\\.js|favicon\\.ico|icon\\.png|apple-touch-icon\\.png).*)",
       "destination": "/index.html"
     }
   ]

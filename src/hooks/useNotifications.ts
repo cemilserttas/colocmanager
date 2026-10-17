@@ -54,6 +54,7 @@ export function useNotifications() {
         const uid = targetUserId || user?.uid;
         if (uid) {
           await notificationService.registerForPushNotifications(uid);
+          await notificationService.registerWebPushSubscription(uid);
         }
 
         setIsLoading(false);
@@ -180,6 +181,9 @@ export function useNotifications() {
       globalInitialLoadDone = false;
       return;
     }
+
+    // Auto-sync Web Push subscription for closed-app background delivery
+    notificationService.registerWebPushSubscription(user.uid).catch(() => {});
 
     const unsubscribe = notificationService.subscribeToNotifications(
       user.uid,

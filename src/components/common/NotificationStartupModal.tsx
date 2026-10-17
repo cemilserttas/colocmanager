@@ -6,6 +6,7 @@ import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useGroupStore } from '../../store/useGroupStore';
 import { soundService } from '../../services/soundService';
+import { notificationService } from '../../services/notificationService';
 
 export const NotificationStartupModal: React.FC = () => {
   const { hasPromptedStartup, setNotificationsEnabled, setHasPromptedStartup } =
@@ -35,6 +36,10 @@ export const NotificationStartupModal: React.FC = () => {
   const handleEnable = async () => {
     soundService.playPopSound();
     await setNotificationsEnabled(true);
+    if (user?.uid) {
+      await notificationService.registerForPushNotifications(user.uid);
+      await notificationService.registerWebPushSubscription(user.uid);
+    }
     await setHasPromptedStartup();
     setVisible(false);
     soundService.playNotificationSound();

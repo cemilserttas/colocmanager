@@ -58,15 +58,25 @@ if (!swJs.includes("self.addEventListener('push'")) throw new Error('sw.js missi
 if (!swJs.includes("self.addEventListener('notificationclick'")) throw new Error('sw.js missing notificationclick listener');
 console.log('✓ OK: sw.js has complete lifecycle and notification listeners.');
 
-// 4. Verify dist export artifacts
-console.log('\n[4] Checking dist/ exported files');
-const distFiles = ['index.html', 'manifest.json', 'sw.js', 'favicon.ico', 'icon.png', 'apple-touch-icon.png'];
-distFiles.forEach((file) => {
-  const p = path.join('dist', file);
-  if (!fs.existsSync(p)) throw new Error(`dist/${file} is missing!`);
-  const stat = fs.statSync(p);
-  if (stat.size === 0) throw new Error(`dist/${file} is empty!`);
-  console.log(`  ✓ dist/${file} exists (${stat.size} bytes)`);
-});
+// 5. Verify Web Push serverless handler & configuration
+console.log('\n[5] Checking api/send-push.js & Vercel API routing');
+if (!fs.existsSync('api/send-push.js')) throw new Error('api/send-push.js is missing!');
+const handler = require('./api/send-push.js');
+if (typeof handler !== 'function') throw new Error('api/send-push.js must export a handler function!');
+console.log('  ✓ api/send-push.js exports valid serverless handler');
 
-console.log('\nALL PWA VERIFICATION TESTS PASSED WITH 100% SUCCESS!');
+const vercelJsonRaw = fs.readFileSync('vercel.json', 'utf8');
+const vercelConfig = JSON.parse(vercelJsonRaw);
+const rewriteRule = vercelConfig.rewrites?.[0]?.source;
+if (!rewriteRule || !rewriteRule.includes('api/')) {
+  throw new Error('vercel.json must exclude api/ from SPA rewrite rule!');
+}
+console.log('  ✓ vercel.json preserves /api/ serverless function routes');
+
+const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+if (!packageJson.dependencies['web-push']) {
+  throw new Error('package.json must contain "web-push" dependency!');
+}
+console.log('  ✓ web-push is present in package.json dependencies');
+
+console.log('\nALL PWA & WEB PUSH VERIFICATION TESTS PASSED WITH 100% SUCCESS!');

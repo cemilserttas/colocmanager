@@ -32,6 +32,19 @@ const notifyDemoNotificationSubscribers = async (userId: string) => {
   }
 };
 
+const VAPID_PUBLIC_KEY = 'BN29BeOIv9Jrkh5opy8rSf2BWgRUI5Mk9-I07X_7gXT2Q1rJpZO9gKgPkSpMEgw175Sl7iT4v2lsgzi3ADPpeZs';
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 /**
  * Service managing push tokens, local scheduled notifications,
  * foreground handlers, and Firestore notifications storage and listeners.
@@ -202,6 +215,125 @@ export const notificationService = {
   },
 
   /**
+   * Registers the browser / PWA for Web Push via Service Worker PushManager
+   * and saves the subscription to the user's Firestore profile.
+   * This enables receiving system push notifications even when the app is completely closed.
+   */
+  async registerWebPushSubscription(userId?: string): Promise<any | null> {
+    if (
+      Platform.OS !== 'web' ||
+      typeof window === 'undefined' ||
+      !('serviceWorker' in navigator) ||
+      !('PushManager' in window)
+    ) {
+      return null;
+    }
+
+    try {
+      if ('Notification' in window && Notification.permission !== 'granted') {
+        const req = await Notification.requestPermission();
+        if (req !== 'granted') {
+          return null;
+        }
+      }
+
+      const registration = await navigator.serviceWorker.ready;
+      let subscription = await registration.pushManager.getSubscription();
+
+      if (!subscription) {
+        const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: applicationServerKey as any,
+        });
+      }
+
+      if (subscription && userId) {
+        const subJson = subscription.toJSON();
+        if (subJson && subJson.endpoint) {
+          const userRef = doc(db, 'users', userId);
+          const userSnap = await getDoc(userRef);
+          let existingSubs: any[] = [];
+          if (userSnap.exists()) {
+            existingSubs = userSnap.data()?.webPushSubscriptions || [];
+          }
+          const filtered = existingSubs.filter(
+            (s: any) => s && s.endpoint && s.endpoint !== subJson.endpoint
+          );
+          filtered.push(subJson);
+          await updateDoc(userRef, {
+            webPushSubscriptions: filtered,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      }
+
+      return subscription;
+    } catch (err) {
+      console.warn('Error registering web push subscription:', err);
+      return null;
+    }
+  },
+
+  /**
+   * Sends a Web Push payload to one or more Web Push subscriptions via our /api/send-push endpoint.
+   * Delivered directly by Apple APNs / Google FCM even when the app is completely closed.
+   */
+  async sendWebPush(
+    subscriptions: any[],
+    title: string,
+    body: string,
+    data?: any,
+    delaySeconds?: number
+  ): Promise<void> {
+    if (!subscriptions || subscriptions.length === 0) return;
+    try {
+      await fetch('/api/send-push', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          subscriptions,
+          title,
+          body,
+          data,
+          delaySeconds,
+        }),
+      });
+    } catch (e) {
+      console.warn('Error sending web push via /api/send-push:', e);
+    }
+  },
+
+  /**
+   * Schedules a Web Push notification to test delivery when the app is completely closed.
+   * Gives the user delaySeconds (default 5s) to close the app or lock their phone.
+   */
+  async testClosedAppWebPush(userId?: string, delaySeconds: number = 5): Promise<boolean> {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') {
+      return false;
+    }
+    try {
+      const sub = await notificationService.registerWebPushSubscription(userId);
+      if (!sub) return false;
+
+      const subData = typeof sub.toJSON === 'function' ? sub.toJSON() : sub;
+      await notificationService.sendWebPush(
+        [subData],
+        'ColocManager 📲',
+        'Notification reçue avec succès alors que l\'application était fermée !',
+        { test: true },
+        delaySeconds
+      );
+      return true;
+    } catch (err) {
+      console.warn('Error scheduling closed app test push:', err);
+      return false;
+    }
+  },
+
+  /**
    * Schedules a local notification to fire after a specified number of seconds.
    *
    * @param title - Notification title
@@ -352,13 +484,22 @@ export const notificationService = {
       newNotification.notifId = notifRef.id;
       await setDoc(notifRef, newNotification);
 
-      // Dispatch remote push notification if recipient has an Expo push token
+      // Dispatch remote push notification (Expo push for native, Web Push for PWA/Web)
       try {
         const recipientUserDoc = await getDoc(doc(db, 'users', recipientUid));
         if (recipientUserDoc.exists()) {
-          const pushToken = recipientUserDoc.data()?.fcmToken;
+          const userData = recipientUserDoc.data();
+          const pushToken = userData?.fcmToken;
           if (pushToken) {
             await notificationService.sendExpoPush(pushToken, title, body, {
+              type,
+              referenceId,
+            });
+          }
+
+          const webSubs = userData?.webPushSubscriptions;
+          if (Array.isArray(webSubs) && webSubs.length > 0) {
+            await notificationService.sendWebPush(webSubs, title, body, {
               type,
               referenceId,
             });
