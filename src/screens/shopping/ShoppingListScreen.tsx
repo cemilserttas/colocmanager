@@ -74,6 +74,7 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
     error: shoppingError,
     markAsPurchased,
     requestRestock,
+    cancelRestock,
     fetchProducts,
   } = useShopping();
 
@@ -136,6 +137,34 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
         err instanceof Error
           ? err.message
           : t('purchaseError') || "Erreur lors de l'enregistrement de l'achat.";
+      setSnackbarMessage(message);
+      setSnackbarVisible(true);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  /**
+   * Dispatches cancel-restock to put an item back in stock immediately.
+   */
+  const handleCancelRestock = async (productId: string, productName: string) => {
+    soundService.playPopSound();
+    setActionLoadingId(productId);
+    try {
+      await cancelRestock(productId);
+      soundService.playSuccessSound();
+      setSnackbarMessage(
+        t('cancelRestockSuccess', { name: productName }) ||
+          `✓ Demande de rachat annulée pour "${productName}".`
+      );
+      setSnackbarVisible(true);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : isEn
+          ? 'Error cancelling restock request.'
+          : 'Erreur lors de l’annulation de la demande.';
       setSnackbarMessage(message);
       setSnackbarVisible(true);
     } finally {
@@ -267,16 +296,45 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigati
             </View>
 
             {isMyTurnToBuy && (
+              <View style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                <Button
+                  mode="contained"
+                  buttonColor="#10B981"
+                  loading={isActionRunning}
+                  disabled={isActionRunning}
+                  onPress={() => handleMarkPurchased(item.id, item.name)}
+                  style={styles.boughtButton}
+                  labelStyle={styles.boughtButtonLabel}
+                >
+                  {t('bought') || 'ACHETÉ ✓'}
+                </Button>
+                <Button
+                  mode="text"
+                  compact
+                  textColor={tokens.textSecondary}
+                  loading={isActionRunning}
+                  disabled={isActionRunning}
+                  onPress={() => handleCancelRestock(item.id, item.name)}
+                  style={{ margin: 0, padding: 0 }}
+                  labelStyle={{ fontSize: 11, fontWeight: '700' }}
+                >
+                  {t('alreadyInStock') || 'Déjà en stock'}
+                </Button>
+              </View>
+            )}
+
+            {!isInStock && !isMyTurnToBuy && (
               <Button
-                mode="contained"
-                buttonColor="#10B981"
+                mode="outlined"
+                textColor="#10B981"
                 loading={isActionRunning}
                 disabled={isActionRunning}
-                onPress={() => handleMarkPurchased(item.id, item.name)}
-                style={styles.boughtButton}
-                labelStyle={styles.boughtButtonLabel}
+                onPress={() => handleCancelRestock(item.id, item.name)}
+                style={[styles.boughtButton, { borderColor: 'rgba(16, 185, 129, 0.45)', borderRadius: 14 }]}
+                labelStyle={{ fontSize: 11, fontWeight: '800' }}
+                compact
               >
-                {t('bought') || 'ACHETÉ ✓'}
+                {t('cancelRestockBtn') || 'Remettre en stock'}
               </Button>
             )}
 

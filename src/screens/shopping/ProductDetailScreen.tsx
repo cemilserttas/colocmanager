@@ -87,6 +87,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
     deleteProduct,
     updateRotationOrder,
     requestRestock,
+    cancelRestock,
     fetchProductHistory,
   } = useShopping();
 
@@ -243,6 +244,25 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
     }
   };
 
+  const handleCancelRestock = async () => {
+    soundService.playPopSound();
+    if (!product) return;
+    try {
+      await cancelRestock(product.id);
+      soundService.playSuccessSound();
+      setSnackbarMessage(
+        t('cancelRestockSuccess', { name: product.name }) ||
+          `✓ Demande de rachat annulée pour "${product.name}".`
+      );
+      setSnackbarVisible(true);
+    } catch {
+      setSnackbarMessage(
+        t('purchaseError') || "Erreur lors de l'annulation du réapprovisionnement."
+      );
+      setSnackbarVisible(true);
+    }
+  };
+
   if (!product) {
     return (
       <View style={[styles.notFoundContainer, { backgroundColor: tokens.bg }]}>
@@ -337,7 +357,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
               </Chip>
             </View>
 
-            {isInStock && (
+            {isInStock ? (
               <Button
                 mode="outlined"
                 textColor="#EF4444"
@@ -346,6 +366,21 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
                 labelStyle={{ fontWeight: '800', fontSize: 12 }}
               >
                 📢 {t('requestRestockBtn') || "Informer qu'il faut en racheter"}
+              </Button>
+            ) : (
+              <Button
+                mode="outlined"
+                textColor="#10B981"
+                onPress={handleCancelRestock}
+                style={{
+                  marginTop: 12,
+                  borderRadius: 18,
+                  borderColor: 'rgba(16, 185, 129, 0.45)',
+                  backgroundColor: isDark ? 'rgba(16, 185, 129, 0.08)' : 'rgba(16, 185, 129, 0.04)',
+                }}
+                labelStyle={{ fontWeight: '800', fontSize: 12 }}
+              >
+                ✓ {t('cancelRestockBtn') || 'Remettre en stock (Annuler la demande)'}
               </Button>
             )}
           </View>

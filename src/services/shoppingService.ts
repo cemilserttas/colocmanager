@@ -172,20 +172,6 @@ export const shoppingService = {
         await mockStorage.setProducts(products);
         await mockStorage.addPurchaseRecord(productId, buyerUid, notes);
         notifyShoppingSubscribers(products);
-
-        // Notify roommates that product was purchased (in stock)
-        // Note: Do NOT notify the next buyer of their turn yet; they will be notified only if restock is requested.
-        for (const uid of p.rotationOrder) {
-          if (uid !== buyerUid) {
-            notificationService.addNotificationToFirestore(
-              uid,
-              'shopping',
-              '🛒 Achat enregistré',
-              `"${p.name}" a été acheté. Il est maintenant en stock.`,
-              productId
-            ).catch(() => {});
-          }
-        }
       }
       return;
     }
@@ -215,21 +201,6 @@ export const shoppingService = {
         purchasedAt: now,
         ...(notes ? { notes } : {}),
       });
-
-      // 🔔 CREATE NOTIFICATIONS IN FIRESTORE
-      // Notify other roommates that purchase was completed and item is now in stock.
-      // (Do NOT send turn notification to next buyer until restock is requested).
-      for (const uid of product.rotationOrder || []) {
-        if (uid !== buyerUid) {
-          notificationService.addNotificationToFirestore(
-            uid,
-            'shopping',
-            '🛒 Achat enregistré',
-            `"${product.name}" a été acheté. Il est maintenant en stock.`,
-            productId
-          ).catch(() => {});
-        }
-      }
     } catch {
       const products = await mockStorage.getProducts();
       const p = products.find((x) => x.id === productId || x.productId === productId);
@@ -267,11 +238,12 @@ export const shoppingService = {
       const currentBuyerUid = getCurrentAssignee(p.rotationOrder || [], p.currentTurnIndex ?? 0);
       const senderName = senderDisplayName || 'Un colocataire';
 
-      if (currentBuyerUid) {
+      // Never send notification to oneself
+      if (currentBuyerUid && currentBuyerUid !== requestedByUid) {
         notificationService.addNotificationToFirestore(
           currentBuyerUid,
           'purchase_turn',
-          '🛒 Rachat nécessaire !',
+          'Rachat nécessaire !',
           `${senderName} signale qu'il faut racheter : "${p.name}". C'est votre tour !`,
           productId
         ).catch(() => {});
@@ -297,11 +269,12 @@ export const shoppingService = {
       const currentBuyerUid = getCurrentAssignee(product.rotationOrder || [], product.currentTurnIndex ?? 0);
       const senderName = senderDisplayName || 'Un colocataire';
 
-      if (currentBuyerUid) {
+      // Never send notification to oneself
+      if (currentBuyerUid && currentBuyerUid !== requestedByUid) {
         notificationService.addNotificationToFirestore(
           currentBuyerUid,
           'purchase_turn',
-          '🛒 Rachat nécessaire !',
+          'Rachat nécessaire !',
           `${senderName} signale qu'il faut racheter : "${product.name}". C'est votre tour !`,
           productId
         ).catch((e) => console.warn('Restock notification error:', e));
@@ -321,11 +294,12 @@ export const shoppingService = {
         const currentBuyerUid = getCurrentAssignee(p.rotationOrder || [], p.currentTurnIndex ?? 0);
         const senderName = senderDisplayName || 'Un colocataire';
 
-        if (currentBuyerUid) {
+        // Never send notification to oneself
+        if (currentBuyerUid && currentBuyerUid !== requestedByUid) {
           notificationService.addNotificationToFirestore(
             currentBuyerUid,
             'purchase_turn',
-            '🛒 Rachat nécessaire !',
+            'Rachat nécessaire !',
             `${senderName} signale qu'il faut racheter : "${p.name}". C'est votre tour !`,
             productId
           ).catch(() => {});
@@ -367,15 +341,17 @@ export const shoppingService = {
       await mockStorage.setProducts(products);
       notifyShoppingSubscribers(products);
 
-      // Dispatch notifications grouped by buyer with their own product reference ID
+      // Dispatch notifications grouped by buyer (never send to oneself)
       for (const [buyerUid, info] of Object.entries(buyerProductsMap)) {
-        notificationService.addNotificationToFirestore(
-          buyerUid,
-          'purchase_turn',
-          '🛒 Rachat nécessaire !',
-          `${senderName} signale qu'il faut racheter : ${info.names.join(', ')}. C'est votre tour !`,
-          info.ids[0] || productIds[0]
-        ).catch(() => {});
+        if (buyerUid !== requestedByUid) {
+          notificationService.addNotificationToFirestore(
+            buyerUid,
+            'purchase_turn',
+            'Rachat nécessaire !',
+            `${senderName} signale qu'il faut racheter : ${info.names.join(', ')}. C'est votre tour !`,
+            info.ids[0] || productIds[0]
+          ).catch(() => {});
+        }
       }
       return;
     }
@@ -444,13 +420,15 @@ export const shoppingService = {
       }
 
       for (const [buyerUid, info] of Object.entries(buyerProductsMap)) {
-        notificationService.addNotificationToFirestore(
-          buyerUid,
-          'purchase_turn',
-          '🛒 Rachat nécessaire !',
-          `${senderName} signale qu'il faut racheter : ${info.names.join(', ')}. C'est votre tour !`,
-          info.ids[0] || productIds[0]
-        ).catch((e) => console.warn('Restock batch notification error:', e));
+        if (buyerUid !== requestedByUid) {
+          notificationService.addNotificationToFirestore(
+            buyerUid,
+            'purchase_turn',
+            'Rachat nécessaire !',
+            `${senderName} signale qu'il faut racheter : ${info.names.join(', ')}. C'est votre tour !`,
+            info.ids[0] || productIds[0]
+          ).catch((e) => console.warn('Restock batch notification error:', e));
+        }
       }
     } catch (err) {
       console.warn('Fallback in requestRestockMultiple:', err);
@@ -475,14 +453,126 @@ export const shoppingService = {
       notifyShoppingSubscribers(products);
 
       for (const [buyerUid, info] of Object.entries(buyerProductsMap)) {
-        notificationService.addNotificationToFirestore(
-          buyerUid,
-          'purchase_turn',
-          '🛒 Rachat nécessaire !',
-          `${senderName} signale qu'il faut racheter : ${info.names.join(', ')}. C'est votre tour !`,
-          info.ids[0] || productIds[0]
-        ).catch(() => {});
+        if (buyerUid !== requestedByUid) {
+          notificationService.addNotificationToFirestore(
+            buyerUid,
+            'purchase_turn',
+            'Rachat nécessaire !',
+            `${senderName} signale qu'il faut racheter : ${info.names.join(', ')}. C'est votre tour !`,
+            info.ids[0] || productIds[0]
+          ).catch(() => {});
+        }
       }
+    }
+  },
+
+  async cancelRestock(productId: string): Promise<Product> {
+    const now = new Date().toISOString();
+
+    if (isDemoMode()) {
+      const products = await mockStorage.getProducts();
+      const p = products.find((x) => x.id === productId || x.productId === productId);
+      if (!p) throw new Error('Produit non trouvé');
+
+      p.needsRestock = false;
+      p.updatedAt = now;
+      await mockStorage.setProducts(products);
+      notifyShoppingSubscribers(products);
+      return p;
+    }
+
+    try {
+      const productRef = doc(db, 'products', productId);
+      const productSnap = await getDoc(productRef);
+      if (!productSnap.exists()) throw new Error('Produit non trouvé');
+
+      const product = productSnap.data() as Product;
+      await updateDoc(productRef, {
+        needsRestock: false,
+        updatedAt: now,
+      });
+
+      product.needsRestock = false;
+      product.updatedAt = now;
+
+      // Keep mockStorage cache in sync
+      mockStorage.getProducts().then((products) => {
+        const p = products.find((x) => x.id === productId || x.productId === productId);
+        if (p) {
+          p.needsRestock = false;
+          p.updatedAt = now;
+          mockStorage.setProducts(products);
+        }
+      }).catch(() => {});
+
+      return product;
+    } catch (error: any) {
+      console.warn('Firebase error in cancelRestock, falling back to local:', error);
+      const products = await mockStorage.getProducts();
+      const p = products.find((x) => x.id === productId || x.productId === productId);
+      if (p) {
+        p.needsRestock = false;
+        p.updatedAt = now;
+        await mockStorage.setProducts(products);
+        notifyShoppingSubscribers(products);
+      }
+      return p || ({} as Product);
+    }
+  },
+
+  async cancelRestockMultiple(productIds: string[]): Promise<void> {
+    if (productIds.length === 0) return;
+    const now = new Date().toISOString();
+
+    if (isDemoMode()) {
+      const products = await mockStorage.getProducts();
+      for (const id of productIds) {
+        const p = products.find((x) => x.id === id || x.productId === id);
+        if (p) {
+          p.needsRestock = false;
+          p.updatedAt = now;
+        }
+      }
+      await mockStorage.setProducts(products);
+      notifyShoppingSubscribers(products);
+      return;
+    }
+
+    try {
+      const products = await mockStorage.getProducts();
+      let modifiedLocalStorage = false;
+      for (const id of productIds) {
+        try {
+          const productRef = doc(db, 'products', id);
+          await updateDoc(productRef, {
+            needsRestock: false,
+            updatedAt: now,
+          });
+        } catch (itemErr) {
+          const p = products.find((x) => x.id === id || x.productId === id);
+          if (p) {
+            p.needsRestock = false;
+            p.updatedAt = now;
+            modifiedLocalStorage = true;
+          }
+        }
+      }
+      if (modifiedLocalStorage) {
+        await mockStorage.setProducts(products);
+        notifyShoppingSubscribers(products);
+      }
+    } catch (err) {
+      console.warn('Fallback in cancelRestockMultiple:', err);
+      const products = await mockStorage.getProducts();
+      for (const id of productIds) {
+        const p = products.find((x) => x.id === id || x.productId === id);
+        if (p) {
+          p.needsRestock = false;
+          p.updatedAt = now;
+        }
+      }
+      await mockStorage.setProducts(products);
+      notifyShoppingSubscribers(products);
     }
   },
 

@@ -248,7 +248,7 @@ export const groupService = {
           .addNotificationToFirestore(
             group.adminUid,
             'member_joined',
-            '👋 Nouveau colocataire !',
+            'Nouveau colocataire !',
             `Un nouveau membre a rejoint la colocation "${group.name}".`,
             groupId
           )
@@ -520,7 +520,7 @@ export const groupService = {
         .addNotificationToFirestore(
           userId,
           'member_left',
-          '👋 Départ de la colocation',
+          'Départ de la colocation',
           'Vous avez été retiré de la colocation.',
           groupId
         )
@@ -578,7 +578,7 @@ export const groupService = {
         .addNotificationToFirestore(
           newAdminUid,
           'admin_transfer',
-          '👑 Rôle administrateur',
+          'Rôle administrateur',
           'Vous êtes désormais le nouvel administrateur de la colocation.',
           groupId
         )

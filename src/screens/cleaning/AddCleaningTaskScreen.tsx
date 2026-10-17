@@ -150,30 +150,15 @@ export const AddCleaningTaskScreen: React.FC<AddCleaningTaskScreenProps> = ({
         nextDueDate: parsedDate,
       });
 
-      // Notify roommates in Firestore & local mobile push
+      // Notify first cleaner in Firestore & local mobile push if it's not the user creating it
       const firstCleanerUid = rotationOrder[0];
-      if (firstCleanerUid) {
+      if (firstCleanerUid && firstCleanerUid !== user?.uid) {
         try {
           await notificationService.addNotificationToFirestore(
             firstCleanerUid,
             'cleaning_turn',
-            '🧹 C\'est votre tour pour le ménage !',
+            'C\'est votre tour pour le ménage !',
             `La tâche "${trimmedName}" (${trimmedArea}) a été planifiée. Vous êtes le premier assigné (échéance : ${dueDateText}) !`
-          );
-        } catch {}
-      }
-
-      const otherMembers = members.filter(
-        (m) => (m.userId || m.id) !== user?.uid && (m.userId || m.id) !== firstCleanerUid
-      );
-      for (const m of otherMembers) {
-        const uid = m.userId || m.id;
-        try {
-          await notificationService.addNotificationToFirestore(
-            uid,
-            'cleaning',
-            '🧹 Nouvelle tâche de ménage !',
-            `L'administrateur a programmé "${trimmedName}" (${trimmedArea}).`
           );
         } catch {}
       }

@@ -8,7 +8,11 @@ import {
   translateNotificationTitle,
   translateNotificationBody,
 } from '../utils/notificationTranslation';
+import { stripLeadingEmojis } from '../utils/stripEmojis';
 import { AppNotification } from '../types';
+
+const globallySeenNotifIds = new Set<string>();
+let globalInitialLoadDone = false;
 
 /**
  * Custom React hook for managing push notification permissions, device registration,
@@ -25,8 +29,7 @@ export function useNotifications() {
   const [error, setError] = useState<string | null>(null);
 
   const isConfiguredRef = useRef<boolean>(false);
-  const seenNotifIdsRef = useRef<Set<string>>(new Set());
-  const initialLoadDoneRef = useRef<boolean>(false);
+
 
   /**
    * Requests push notification permissions and saves the Expo push token
@@ -116,16 +119,41 @@ export function useNotifications() {
   /**
    * Marks a notification as read.
    */
-  const markAsRead = useCallback(async (notificationId: string): Promise<void> => {
+  const markAsRead = useCallback(
+    async (notificationId: string): Promise<void> => {
+      try {
+        await notificationService.markNotificationRead(notificationId, user?.uid);
+        setNotifications((prev) =>
+          prev.map((n) => (n.id === notificationId ? { ...n, isRead: true } : n))
+        );
+      } catch (err: any) {
+        console.error('Failed to mark notification as read:', err);
+      }
+    },
+    [user?.uid]
+  );
+
+  const deleteNotification = useCallback(
+    async (notificationId: string): Promise<void> => {
+      try {
+        await notificationService.deleteNotification(notificationId, user?.uid);
+        setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
+      } catch (err: any) {
+        console.error('Failed to delete notification:', err);
+      }
+    },
+    [user?.uid]
+  );
+
+  const clearAllNotifications = useCallback(async (): Promise<void> => {
+    if (!user?.uid) return;
     try {
-      await notificationService.markNotificationRead(notificationId);
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === notificationId ? { ...n, isRead: true } : n))
-      );
+      await notificationService.clearAllNotifications(user.uid);
+      setNotifications([]);
     } catch (err: any) {
-      console.error('Failed to mark notification as read:', err);
+      console.error('Failed to clear notifications:', err);
     }
-  }, []);
+  }, [user?.uid]);
 
   // Configure foreground notification behavior once on mount
   useEffect(() => {
@@ -144,12 +172,12 @@ export function useNotifications() {
     }
   }, [user?.uid, registerForNotifications]);
 
-  // Subscribe to user notifications in Firestore
+  // Subscribe to user notifications in Firestore / mockStorage
   useEffect(() => {
     if (!user?.uid) {
       setNotifications([]);
-      seenNotifIdsRef.current.clear();
-      initialLoadDoneRef.current = false;
+      globallySeenNotifIds.clear();
+      globalInitialLoadDone = false;
       return;
     }
 
@@ -158,22 +186,22 @@ export function useNotifications() {
       (newNotifs) => {
         setNotifications(newNotifs);
 
-        if (!initialLoadDoneRef.current) {
-          // Record current notification ids so initial loading doesn't spam previous alerts
-          newNotifs.forEach((n) => seenNotifIdsRef.current.add(n.id));
-          initialLoadDoneRef.current = true;
+        if (!globalInitialLoadDone) {
+          // Record existing notification IDs so initial mount doesn't re-trigger push
+          newNotifs.forEach((n) => globallySeenNotifIds.add(n.id));
+          globalInitialLoadDone = true;
           return;
         }
 
         const prefs = useNotificationPreferences.getState();
         if (!prefs.notificationsEnabled) {
-          newNotifs.forEach((n) => seenNotifIdsRef.current.add(n.id));
+          newNotifs.forEach((n) => globallySeenNotifIds.add(n.id));
           return;
         }
 
         newNotifs.forEach((notif) => {
-          if (!notif.isRead && !seenNotifIdsRef.current.has(notif.id)) {
-            seenNotifIdsRef.current.add(notif.id);
+          if (!notif.isRead && !globallySeenNotifIds.has(notif.id)) {
+            globallySeenNotifIds.add(notif.id);
 
             let isAllowed = true;
             const titleLower = (notif.title || '').toLowerCase();
@@ -218,16 +246,22 @@ export function useNotifications() {
 
             if (isAllowed) {
               const isEn = useLanguageStore.getState().language === 'en';
-              const title = translateNotificationTitle(notif.title, isEn);
-              const body = translateNotificationBody(notif.body, isEn);
+              const cleanTitle = stripLeadingEmojis(notif.title);
+              const cleanBody = stripLeadingEmojis(notif.body);
+              const title = translateNotificationTitle(cleanTitle, isEn);
+              const body = translateNotificationBody(cleanBody, isEn);
 
               Notifications.scheduleNotificationAsync({
                 content: {
                   title,
                   body,
                   sound: true,
+                  priority: Notifications.AndroidNotificationPriority.MAX,
+                  vibrate: [0, 250, 250, 250],
                 },
-                trigger: null,
+                trigger: {
+                  channelId: 'default',
+                },
               }).catch((e) => console.warn('Push dispatch error:', e));
             }
           }
@@ -247,6 +281,8 @@ export function useNotifications() {
     scheduleNotification,
     cancelNotification,
     markAsRead,
+    deleteNotification,
+    clearAllNotifications,
     notifications,
     unreadCount,
     hasPermission,

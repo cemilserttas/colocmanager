@@ -46,6 +46,20 @@ export function useShopping() {
     [user?.uid, user?.displayName, productsHook]
   );
 
+  const cancelRestock = useCallback(
+    async (productId: string) => {
+      return productsHook.cancelRestock(productId);
+    },
+    [productsHook]
+  );
+
+  const cancelRestockMultiple = useCallback(
+    async (productIds: string[]) => {
+      return productsHook.cancelRestockMultiple(productIds);
+    },
+    [productsHook]
+  );
+
   return {
     ...productsHook,
     loading: productsHook.isLoading,
@@ -54,6 +68,8 @@ export function useShopping() {
     markAsPurchased,
     requestRestock,
     requestRestockMultiple,
+    cancelRestock,
+    cancelRestockMultiple,
     fetchProducts: productsHook.loadProducts,
     fetchProductHistory: productsHook.getProductHistory,
   };

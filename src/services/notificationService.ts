@@ -9,6 +9,8 @@ import {
   getDocs,
   setDoc,
   updateDoc,
+  deleteDoc,
+  writeBatch,
   query,
   where,
   orderBy,
@@ -19,11 +21,15 @@ import { AppNotification, NotificationType, Product, CleaningTask } from '../typ
 import { isDemoMode, mockStorage } from './mockStorage';
 import { getCurrentAssignee } from '../utils/rotation';
 
-const demoNotificationSubscribers = new Set<(notifications: AppNotification[]) => void>();
+const demoNotificationSubscribers = new Map<string, Set<(notifications: AppNotification[]) => void>>();
 
 const notifyDemoNotificationSubscribers = async (userId: string) => {
+  if (!userId) return;
   const notifs = await mockStorage.getNotifications(userId);
-  demoNotificationSubscribers.forEach((cb) => cb(notifs));
+  const subs = demoNotificationSubscribers.get(userId);
+  if (subs) {
+    subs.forEach((cb) => cb(notifs));
+  }
 };
 
 /**
@@ -33,6 +39,7 @@ const notifyDemoNotificationSubscribers = async (userId: string) => {
 export const notificationService = {
   /**
    * Configures foreground notification display options (sound, alert banner, badge).
+   * Also ensures default Android channel is created immediately on app launch.
    */
   setupNotificationHandler(): void {
     Notifications.setNotificationHandler({
@@ -44,6 +51,16 @@ export const notificationService = {
         shouldShowList: true,
       }),
     });
+
+    if (Platform.OS === 'android') {
+      Notifications.setNotificationChannelAsync('default', {
+        name: 'ColocManager Notifications',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#4F46E5',
+        sound: 'default',
+      }).catch(() => {});
+    }
   },
 
   /**
@@ -54,11 +71,6 @@ export const notificationService = {
    */
   async requestPermissions(): Promise<boolean> {
     try {
-      if (!Device.isDevice) {
-        console.warn('NotificationService: Push notifications require a physical device.');
-        return false;
-      }
-
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
 
@@ -78,6 +90,7 @@ export const notificationService = {
           importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 250, 250, 250],
           lightColor: '#4F46E5',
+          sound: 'default',
         });
       }
 
@@ -335,9 +348,19 @@ export const notificationService = {
    *
    * @param notifId - The unique notification document ID
    */
-  async markNotificationRead(notifId: string): Promise<void> {
+  async markNotificationRead(notifId: string, recipientUid?: string): Promise<void> {
     if (isDemoMode()) {
       await mockStorage.markNotificationRead(notifId);
+      if (recipientUid) {
+        notifyDemoNotificationSubscribers(recipientUid).catch(() => {});
+      } else {
+        mockStorage.getNotifications().then((all) => {
+          const target = all.find((n) => n.id === notifId || n.notifId === notifId);
+          if (target?.recipientUid) {
+            notifyDemoNotificationSubscribers(target.recipientUid).catch(() => {});
+          }
+        }).catch(() => {});
+      }
       return;
     }
 
@@ -349,6 +372,60 @@ export const notificationService = {
     } catch (error: any) {
       console.warn(`Fallback marking notification read for ${notifId}:`, error);
       await mockStorage.markNotificationRead(notifId);
+      if (recipientUid) {
+        notifyDemoNotificationSubscribers(recipientUid).catch(() => {});
+      }
+    }
+  },
+
+  /**
+   * Deletes a specific notification record.
+   */
+  async deleteNotification(notifId: string, recipientUid?: string): Promise<void> {
+    if (isDemoMode()) {
+      await mockStorage.deleteNotification(notifId);
+      if (recipientUid) {
+        notifyDemoNotificationSubscribers(recipientUid).catch(() => {});
+      }
+      return;
+    }
+
+    try {
+      await deleteDoc(doc(db, 'notifications', notifId));
+    } catch (error: any) {
+      console.warn(`Fallback deleting notification ${notifId}:`, error);
+      await mockStorage.deleteNotification(notifId);
+      if (recipientUid) {
+        notifyDemoNotificationSubscribers(recipientUid).catch(() => {});
+      }
+    }
+  },
+
+  /**
+   * Clears all notifications for a specific user.
+   */
+  async clearAllNotifications(userId: string): Promise<void> {
+    if (isDemoMode()) {
+      await mockStorage.clearAllNotifications(userId);
+      notifyDemoNotificationSubscribers(userId).catch(() => {});
+      return;
+    }
+
+    try {
+      const q = query(
+        collection(db, 'notifications'),
+        where('recipientUid', '==', userId)
+      );
+      const snap = await getDocs(q);
+      const batch = writeBatch(db);
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+      await mockStorage.clearAllNotifications(userId);
+      notifyDemoNotificationSubscribers(userId).catch(() => {});
+    } catch (error: any) {
+      console.warn(`Fallback clearing notifications for ${userId}:`, error);
+      await mockStorage.clearAllNotifications(userId);
+      notifyDemoNotificationSubscribers(userId).catch(() => {});
     }
   },
 
@@ -385,71 +462,71 @@ export const notificationService = {
           });
 
           if (!hasRecentReminder) {
-            await notificationService.addNotificationToFirestore(
-              userId,
-              'reminder',
-              '⏰ Rappel d\'achat !',
-              `C'est votre tour d'acheter : "${p.name}". Pensez-y lors de vos courses !`,
-              p.id
-            );
-          }
-        }
-      }
-
-      // 2. Check cleaning tasks where it's currently userId's turn and due soon or overdue
-      for (const t of tasks) {
-        if (!t.isActive || !t.rotationOrder || t.rotationOrder.length === 0) continue;
-        const currentCleaner = getCurrentAssignee(t.rotationOrder, t.currentTurnIndex ?? 0);
-        if (currentCleaner === userId && t.nextDueDate) {
-          const dueDate = new Date(t.nextDueDate).getTime();
-          const isOverdue = dueDate < Date.now();
-          const isDueSoon = dueDate - Date.now() < 2 * 24 * 60 * 60 * 1000; // within 48h
-
-          if (isOverdue || isDueSoon) {
-            const hasRecentReminder = existingNotifs.some((n) => {
-              const notifTime = new Date(n.createdAt).getTime();
-              return (
-                n.referenceId === t.id &&
-                (n.type === 'reminder' || n.type === 'cleaning_turn') &&
-                notifTime > oneDayAgo
-              );
-            });
-
-            if (!hasRecentReminder) {
-              const formattedDate = new Date(t.nextDueDate).toLocaleDateString('fr-FR', {
-                day: 'numeric',
-                month: 'short',
-              });
-
               await notificationService.addNotificationToFirestore(
                 userId,
                 'reminder',
-                isOverdue ? '🚨 Tâche en retard !' : '⏰ Rappel de ménage !',
-                isOverdue
-                  ? `La tâche "${t.name}" (${t.area}) est en retard ! Pensez à l'effectuer dès que possible.`
-                  : `N'oubliez pas : votre tâche "${t.name}" (${t.area}) est prévue pour le ${formattedDate}.`,
-                t.id
+                'Rappel d\'achat !',
+                `C'est votre tour d'acheter : "${p.name}". Pensez-y lors de vos courses !`,
+                p.id
               );
             }
           }
         }
-      }
-    } catch (err) {
-      console.warn('Error running checkAndGenerateReminders:', err);
-    }
-  },
 
-  /**
-   * Sends an immediate peer reminder to a roommate from another roommate/admin.
-   */
-  async sendPeerReminder(
-    senderName: string,
-    recipientUid: string,
-    itemType: 'shopping' | 'cleaning',
-    itemName: string,
-    itemId: string
-  ): Promise<void> {
-    const title = '⏰ Rappel amical de colocation';
+        // 2. Check cleaning tasks where it's currently userId's turn and due soon or overdue
+        for (const t of tasks) {
+          if (!t.isActive || !t.rotationOrder || t.rotationOrder.length === 0) continue;
+          const currentCleaner = getCurrentAssignee(t.rotationOrder, t.currentTurnIndex ?? 0);
+          if (currentCleaner === userId && t.nextDueDate) {
+            const dueDate = new Date(t.nextDueDate).getTime();
+            const isOverdue = dueDate < Date.now();
+            const isDueSoon = dueDate - Date.now() < 2 * 24 * 60 * 60 * 1000; // within 48h
+
+            if (isOverdue || isDueSoon) {
+              const hasRecentReminder = existingNotifs.some((n) => {
+                const notifTime = new Date(n.createdAt).getTime();
+                return (
+                  n.referenceId === t.id &&
+                  (n.type === 'reminder' || n.type === 'cleaning_turn') &&
+                  notifTime > oneDayAgo
+                );
+              });
+
+              if (!hasRecentReminder) {
+                const formattedDate = new Date(t.nextDueDate).toLocaleDateString('fr-FR', {
+                  day: 'numeric',
+                  month: 'short',
+                });
+
+                await notificationService.addNotificationToFirestore(
+                  userId,
+                  'reminder',
+                  isOverdue ? 'Tâche en retard !' : 'Rappel de ménage !',
+                  isOverdue
+                    ? `La tâche "${t.name}" (${t.area}) est en retard ! Pensez à l'effectuer dès que possible.`
+                    : `N'oubliez pas : votre tâche "${t.name}" (${t.area}) est prévue pour le ${formattedDate}.`,
+                  t.id
+                );
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Error running checkAndGenerateReminders:', err);
+      }
+    },
+
+    /**
+     * Sends an immediate peer reminder to a roommate from another roommate/admin.
+     */
+    async sendPeerReminder(
+      senderName: string,
+      recipientUid: string,
+      itemType: 'shopping' | 'cleaning',
+      itemName: string,
+      itemId: string
+    ): Promise<void> {
+      const title = 'Rappel amical de colocation';
     const body =
       itemType === 'shopping'
         ? `${senderName} vous rappelle gentiment qu'il faut acheter "${itemName}".`
@@ -477,11 +554,21 @@ export const notificationService = {
   ): () => void {
     if (isDemoMode()) {
       mockStorage.getNotifications(userId).then(callback).catch(() => {});
-      demoNotificationSubscribers.add(callback);
+      if (!demoNotificationSubscribers.has(userId)) {
+        demoNotificationSubscribers.set(userId, new Set());
+      }
+      const subs = demoNotificationSubscribers.get(userId)!;
+      subs.add(callback);
       return () => {
-        demoNotificationSubscribers.delete(callback);
+        subs.delete(callback);
+        if (subs.size === 0) {
+          demoNotificationSubscribers.delete(userId);
+        }
       };
     }
+
+    let innerUnsub: (() => void) | null = null;
+    let isCancelled = false;
 
     const q = query(
       collection(db, 'notifications'),
@@ -489,21 +576,24 @@ export const notificationService = {
       orderBy('createdAt', 'desc')
     );
 
-    return onSnapshot(
+    innerUnsub = onSnapshot(
       q,
       (querySnap) => {
+        if (isCancelled) return;
         const notifs = querySnap.docs.map(
           (docSnap) => docSnap.data() as AppNotification
         );
         callback(notifs);
       },
       (error) => {
+        if (isCancelled) return;
         console.warn('Realtime notifications index error, fallback to unindexed query:', error);
         const fallbackQ = query(
           collection(db, 'notifications'),
           where('recipientUid', '==', userId)
         );
-        return onSnapshot(fallbackQ, (querySnap) => {
+        innerUnsub = onSnapshot(fallbackQ, (querySnap) => {
+          if (isCancelled) return;
           const fallbackNotifs = querySnap.docs
             .map((docSnap) => docSnap.data() as AppNotification)
             .sort(
@@ -514,6 +604,13 @@ export const notificationService = {
         });
       }
     );
+
+    return () => {
+      isCancelled = true;
+      if (innerUnsub) {
+        innerUnsub();
+      }
+    };
   },
 };
 

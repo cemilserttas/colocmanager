@@ -65,6 +65,16 @@ export interface ShoppingState {
   ) => Promise<void>;
 
   /**
+   * Cancels restock request for a product, putting it back in stock.
+   */
+  cancelRestock: (productId: string) => Promise<void>;
+
+  /**
+   * Cancels restock request for multiple products in batch.
+   */
+  cancelRestockMultiple: (productIds: string[]) => Promise<void>;
+
+  /**
    * Fetches past purchase logs for a specific product.
    */
   getProductHistory: (
@@ -249,6 +259,43 @@ export const useShoppingStore = create<ShoppingState>((set) => ({
     } catch (error: any) {
       const errorMessage =
         error?.message || 'Erreur lors de la demande de réapprovisionnement.';
+      set({ error: errorMessage });
+      throw error;
+    }
+  },
+
+  cancelRestock: async (productId: string) => {
+    try {
+      await shoppingService.cancelRestock(productId);
+      set((state) => ({
+        products: state.products.map((p) =>
+          p.id === productId || p.productId === productId
+            ? { ...p, needsRestock: false }
+            : p
+        ),
+      }));
+    } catch (error: any) {
+      const errorMessage =
+        error?.message || "Erreur lors de l'annulation du réapprovisionnement.";
+      set({ error: errorMessage });
+      throw error;
+    }
+  },
+
+  cancelRestockMultiple: async (productIds: string[]) => {
+    try {
+      await shoppingService.cancelRestockMultiple(productIds);
+      const idSet = new Set(productIds);
+      set((state) => ({
+        products: state.products.map((p) =>
+          idSet.has(p.id) || (p.productId && idSet.has(p.productId))
+            ? { ...p, needsRestock: false }
+            : p
+        ),
+      }));
+    } catch (error: any) {
+      const errorMessage =
+        error?.message || "Erreur lors de l'annulation du réapprovisionnement.";
       set({ error: errorMessage });
       throw error;
     }

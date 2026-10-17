@@ -86,6 +86,12 @@ export const translations = {
     inStock: 'En stock',
     allProductsCatalog: 'Catalogue complet',
     purchasedOnly: 'Déjà achetés',
+    cancelRestock: 'Annuler la demande',
+    cancelRestockBtn: 'Remettre en stock',
+    alreadyInStock: 'Déjà en stock',
+    cancelRestockSuccess: 'Demande de rachat annulée pour "{name}".',
+    cancelRestockMultipleSuccess: 'Demandes de rachat annulées. Produits remis en stock.',
+
 
     // Cleaning
     cleaningTitle: '🧹 Planning de Nettoyage',
@@ -204,8 +210,10 @@ export const translations = {
     validateCreate: 'Créer la colocation',
 
     // Notifications Drawer
-    notificationsCenter: 'Notifications',
+    notificationsCenter: 'Centre de notifications',
     allRead: 'Tout marquer comme lu',
+    clearAllNotifs: 'Tout effacer',
+    notifCleared: 'Notifications effacées',
     noNotifications: 'Aucune notification pour le moment',
 
     // General & Navigation
@@ -329,6 +337,12 @@ export const translations = {
     inStock: 'In stock',
     allProductsCatalog: 'Full catalog',
     purchasedOnly: 'Purchased only',
+    cancelRestock: 'Cancel request',
+    cancelRestockBtn: 'Put back in stock',
+    alreadyInStock: 'Already in stock',
+    cancelRestockSuccess: 'Restock request cancelled for "{name}".',
+    cancelRestockMultipleSuccess: 'Restock requests cancelled. Products back in stock.',
+
 
     // Cleaning
     cleaningTitle: '🧹 Cleaning Schedule',
@@ -449,6 +463,8 @@ export const translations = {
     // Notifications Drawer
     notificationsCenter: 'Notifications',
     allRead: 'Mark all as read',
+    clearAllNotifs: 'Clear all',
+    notifCleared: 'Notifications cleared',
     noNotifications: 'No notifications at this time',
 
     // General & Navigation

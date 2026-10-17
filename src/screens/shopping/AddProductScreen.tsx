@@ -112,30 +112,15 @@ export const AddProductScreen: React.FC<AddProductScreenProps> = ({ navigation }
     try {
       await addProduct(trimmedName, '🛒', rotationOrder, comment.trim() || undefined);
 
-      // Notify roommates in Firestore & mobile push
+      // Notify first buyer in Firestore & mobile push if it's not the user creating it
       const firstBuyerUid = rotationOrder[0];
-      if (firstBuyerUid) {
+      if (firstBuyerUid && firstBuyerUid !== user?.uid) {
         try {
           await notificationService.addNotificationToFirestore(
             firstBuyerUid,
             'purchase_turn',
-            '🛒 C\'est votre tour d\'acheter !',
+            'C\'est votre tour d\'acheter !',
             `Le produit "${trimmedName}" a été ajouté. Vous êtes le premier responsable de cet achat !`
-          );
-        } catch {}
-      }
-
-      const otherMembers = members.filter(
-        (m) => (m.userId || m.id) !== user?.uid && (m.userId || m.id) !== firstBuyerUid
-      );
-      for (const m of otherMembers) {
-        const uid = m.userId || m.id;
-        try {
-          await notificationService.addNotificationToFirestore(
-            uid,
-            'shopping',
-            '🛒 Nouveau produit ajouté !',
-            `L'administrateur a ajouté "${trimmedName}" à la liste des courses partagées.`
           );
         } catch {}
       }

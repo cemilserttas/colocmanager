@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { Text, Portal, Dialog, Button, Divider } from 'react-native-paper';
 import { useNotifications } from '../../hooks/useNotifications';
+import { useAuthStore } from '../../store/useAuthStore';
 import { useThemeStore, getLiquidGlassTokens } from '../../store/useThemeStore';
 import { useLanguageStore } from '../../store/useLanguageStore';
 import { soundService } from '../../services/soundService';
@@ -15,14 +16,40 @@ import {
   translateNotificationTitle,
   translateNotificationBody,
 } from '../../utils/notificationTranslation';
+import { stripLeadingEmojis } from '../../utils/stripEmojis';
 
 export const NotificationBell: React.FC = () => {
   const { isDark } = useThemeStore();
   const tokens = getLiquidGlassTokens(isDark);
   const { t, language } = useLanguageStore();
   const isEn = language === 'en';
-  const { notifications, unreadCount, markAsRead } = useNotifications();
+  const user = useAuthStore((state) => state.user);
+  const {
+    notifications,
+    markAsRead,
+    deleteNotification,
+    clearAllNotifications,
+  } = useNotifications();
   const [modalVisible, setModalVisible] = useState(false);
+
+  const userDisplayName = user?.displayName?.trim().toLowerCase();
+
+  // Filter out any self-notifications that may exist in legacy DB
+  const filteredNotifications = notifications.filter((notif) => {
+    if (userDisplayName) {
+      const bodyLower = (notif.body || '').toLowerCase();
+      if (
+        (bodyLower.includes(`${userDisplayName} signale`) ||
+          bodyLower.includes(`${userDisplayName} reports`)) &&
+        (bodyLower.includes("c'est votre tour") || bodyLower.includes("it's your turn"))
+      ) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  const unreadCount = filteredNotifications.filter((n) => !n.isRead).length;
 
   const handleOpen = () => {
     soundService.playPopSound();
@@ -30,11 +57,16 @@ export const NotificationBell: React.FC = () => {
   };
 
   const handleMarkAllRead = () => {
-    notifications.forEach((n) => {
+    filteredNotifications.forEach((n) => {
       if (!n.isRead) {
         markAsRead(n.id);
       }
     });
+  };
+
+  const handleClearAll = () => {
+    soundService.playPopSound();
+    clearAllNotifications();
   };
 
   return (
@@ -83,20 +115,32 @@ export const NotificationBell: React.FC = () => {
               )}
             </View>
 
-            {unreadCount > 0 && (
-              <Button
-                mode="text"
-                compact
-                onPress={handleMarkAllRead}
-                labelStyle={{ fontSize: 12, color: tokens.primary }}
-              >
-                {t('allRead')}
-              </Button>
-            )}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              {unreadCount > 0 && (
+                <Button
+                  mode="text"
+                  compact
+                  onPress={handleMarkAllRead}
+                  labelStyle={{ fontSize: 12, color: tokens.primary }}
+                >
+                  {t('allRead')}
+                </Button>
+              )}
+              {filteredNotifications.length > 0 && (
+                <Button
+                  mode="text"
+                  compact
+                  onPress={handleClearAll}
+                  labelStyle={{ fontSize: 12, color: tokens.error || '#EF4444' }}
+                >
+                  {t('clearAllNotifs') || 'Vider'}
+                </Button>
+              )}
+            </View>
           </View>
 
           <Dialog.Content style={{ maxHeight: 380, paddingHorizontal: 0 }}>
-            {notifications.length === 0 ? (
+            {filteredNotifications.length === 0 ? (
               <View style={styles.emptyContainer}>
                 <Text style={{ fontSize: 36, marginBottom: 8 }}>✨</Text>
                 <Text style={{ color: tokens.textSecondary, textAlign: 'center', fontSize: 13 }}>
@@ -105,13 +149,30 @@ export const NotificationBell: React.FC = () => {
               </View>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false}>
-                {notifications.map((notif, idx) => {
+                {filteredNotifications.map((notif, idx) => {
                   const getIcon = () => {
-                    if (notif.type === 'shopping' || notif.type === ('product_added' as any)) return '🛒';
-                    if (notif.type === 'cleaning' || notif.type === ('cleaning_added' as any)) return '🧹';
-                    if (notif.type === 'group') return '👑';
+                    if (
+                      notif.type === 'shopping' ||
+                      notif.type === 'purchase_turn' ||
+                      notif.type === ('product_added' as any)
+                    ) return '🛒';
+                    if (
+                      notif.type === 'cleaning' ||
+                      notif.type === 'cleaning_turn' ||
+                      notif.type === ('cleaning_added' as any)
+                    ) return '🧹';
+                    if (
+                      notif.type === 'group' ||
+                      notif.type === 'admin' ||
+                      notif.type === 'admin_transfer'
+                    ) return '👑';
+                    if (notif.type === 'member_joined' || notif.type === 'member_left') return '👋';
+                    if (notif.type === 'reminder') return '⏰';
                     return '📢';
                   };
+
+                  const cleanTitle = stripLeadingEmojis(notif.title);
+                  const cleanBody = stripLeadingEmojis(notif.body);
 
                   return (
                     <TouchableOpacity
@@ -135,17 +196,34 @@ export const NotificationBell: React.FC = () => {
                             style={{
                               fontWeight: notif.isRead ? '600' : '800',
                               color: tokens.text,
+                              flex: 1,
+                              marginRight: 6,
                             }}
                           >
-                            {translateNotificationTitle(notif.title, isEn)}
+                            {translateNotificationTitle(cleanTitle, isEn)}
                           </Text>
-                          {!notif.isRead && <View style={styles.unreadIndicator} />}
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            {!notif.isRead && <View style={styles.unreadIndicator} />}
+                            <TouchableOpacity
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                soundService.playPopSound();
+                                deleteNotification(notif.id);
+                              }}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              style={{ padding: 4, marginLeft: 6 }}
+                            >
+                              <Text style={{ fontSize: 12, color: tokens.textSecondary, fontWeight: '700' }}>
+                                ✕
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
                         </View>
                         <Text
                           variant="bodySmall"
                           style={{ color: tokens.textSecondary, marginTop: 2, lineHeight: 17 }}
                         >
-                          {translateNotificationBody(notif.body, isEn)}
+                          {translateNotificationBody(cleanBody, isEn)}
                         </Text>
                       </View>
                     </TouchableOpacity>

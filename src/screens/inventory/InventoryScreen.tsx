@@ -56,7 +56,14 @@ export const InventoryScreen: React.FC = () => {
 
   const { user } = useAuth();
   const { members } = useGroup();
-  const { products = [], loading, fetchProducts, requestRestockMultiple } = useShopping();
+  const {
+    products = [],
+    loading,
+    fetchProducts,
+    requestRestockMultiple,
+    cancelRestock,
+    cancelRestockMultiple,
+  } = useShopping();
 
   const [filterMode, setFilterMode] = useState<'purchased' | 'all'>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -70,6 +77,13 @@ export const InventoryScreen: React.FC = () => {
     }
     return products.filter((p) => p.isActive !== false);
   }, [products, filterMode]);
+
+  const selectedItems = useMemo(() => {
+    return displayedProducts.filter((p) => selectedIds.has(p.id));
+  }, [displayedProducts, selectedIds]);
+
+  const hasRestockNeededSelected = selectedItems.some((p) => p.needsRestock !== false);
+  const hasInStockSelected = selectedItems.some((p) => p.needsRestock === false);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -104,8 +118,58 @@ export const InventoryScreen: React.FC = () => {
     }
   };
 
+  const handleCancelRestockSingle = async (productId: string, productName: string) => {
+    soundService.playPopSound();
+    try {
+      await cancelRestock(productId);
+      soundService.playSuccessSound();
+      setSnackbarMessage(
+        t('cancelRestockSuccess', { name: productName }) ||
+          `✓ Demande de rachat annulée pour "${productName}".`
+      );
+    } catch {
+      setSnackbarMessage(
+        isEn
+          ? 'Error cancelling restock request.'
+          : 'Erreur lors de l’annulation du réapprovisionnement.'
+      );
+    }
+  };
+
+  const handleCancelRestockBatch = async () => {
+    const toCancelIds = selectedItems
+      .filter((p) => p.needsRestock !== false)
+      .map((p) => p.id);
+    if (toCancelIds.length === 0) return;
+
+    soundService.playPopSound();
+    setSubmitting(true);
+    try {
+      await cancelRestockMultiple(toCancelIds);
+      soundService.playSuccessSound();
+      setSnackbarMessage(
+        t('cancelRestockMultipleSuccess') ||
+          'Demandes de rachat annulées. Produits remis en stock.'
+      );
+      setSelectedIds(new Set());
+    } catch {
+      setSnackbarMessage(
+        isEn
+          ? 'Error cancelling restock requests.'
+          : 'Erreur lors de l’annulation du réapprovisionnement.'
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleRequestRestock = async () => {
-    if (selectedIds.size === 0) {
+    const toRequestIds = selectedItems
+      .filter((p) => p.needsRestock === false)
+      .map((p) => p.id);
+
+    const idsToUse = toRequestIds.length > 0 ? toRequestIds : Array.from(selectedIds);
+    if (idsToUse.length === 0) {
       setSnackbarMessage(t('selectAtLeastOne'));
       return;
     }
@@ -115,10 +179,9 @@ export const InventoryScreen: React.FC = () => {
 
     try {
       const senderName = user?.displayName || user?.email || (isEn ? 'A roommate' : 'Un colocataire');
-      const selectedIdList = Array.from(selectedIds);
 
       // Marks products as needsRestock: true in Firestore/mockStorage & dispatches turn alert to responsible buyers
-      await requestRestockMultiple(selectedIdList, senderName);
+      await requestRestockMultiple(idsToUse, senderName);
 
       soundService.playSuccessSound();
       setSnackbarMessage(t('restockSuccess'));
@@ -228,6 +291,25 @@ export const InventoryScreen: React.FC = () => {
             <Text variant="labelSmall" style={{ color: tokens.textSecondary, marginTop: 2 }}>
               🕒 {t('lastPurchase')} {item.lastPurchasedAt ? `${formatDate(item.lastPurchasedAt, isEn)}${lastBuyerName ? ` ${t('by')} ${lastBuyerName}` : ''}` : t('noPurchaseRecord')}
             </Text>
+
+            {!isInStock && (
+              <View style={{ marginTop: 8, flexDirection: 'row' }}>
+                <Button
+                  mode="outlined"
+                  compact
+                  textColor="#10B981"
+                  style={{
+                    borderColor: 'rgba(16, 185, 129, 0.45)',
+                    borderRadius: 14,
+                    backgroundColor: isDark ? 'rgba(16, 185, 129, 0.08)' : 'rgba(16, 185, 129, 0.04)',
+                  }}
+                  labelStyle={{ fontSize: 11, fontWeight: '700' }}
+                  onPress={() => handleCancelRestockSingle(item.id, item.name)}
+                >
+                  ✓ {t('cancelRestockBtn') || 'Remettre en stock'}
+                </Button>
+              </View>
+            )}
           </View>
         </View>
       </TouchableOpacity>
@@ -385,27 +467,48 @@ export const InventoryScreen: React.FC = () => {
             },
           ]}
         >
-          <View style={{ flex: 1, marginRight: 12 }}>
+          <View style={{ flex: 1, marginRight: 8 }}>
             <Text variant="titleSmall" style={{ fontWeight: '900', color: tokens.text }}>
               {selectedIds.size} {t('itemsSelected')}
             </Text>
             <Text variant="bodySmall" style={{ color: tokens.textSecondary }}>
-              {t('itemToRepurchase')}
+              {hasRestockNeededSelected && !hasInStockSelected
+                ? (t('itemToRepurchase') || 'À racheter')
+                : (t('inventoryTitle') || 'Inventaire')}
             </Text>
           </View>
 
-          <Button
-            mode="contained"
-            buttonColor="#EF4444"
-            textColor="#FFFFFF"
-            loading={submitting}
-            disabled={submitting}
-            onPress={handleRequestRestock}
-            style={styles.restockButton}
-            labelStyle={{ fontWeight: '800', fontSize: 13 }}
-          >
-            {t('requestRestockBtn')}
-          </Button>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {hasRestockNeededSelected && (
+              <Button
+                mode="contained"
+                buttonColor="#10B981"
+                textColor="#FFFFFF"
+                loading={submitting}
+                disabled={submitting}
+                onPress={handleCancelRestockBatch}
+                style={[styles.restockButton, hasInStockSelected && { marginRight: 8 }]}
+                labelStyle={{ fontWeight: '800', fontSize: 12 }}
+              >
+                {t('cancelRestockBtn') || 'Remettre en stock'}
+              </Button>
+            )}
+
+            {hasInStockSelected && (
+              <Button
+                mode="contained"
+                buttonColor="#EF4444"
+                textColor="#FFFFFF"
+                loading={submitting}
+                disabled={submitting}
+                onPress={handleRequestRestock}
+                style={styles.restockButton}
+                labelStyle={{ fontWeight: '800', fontSize: 12 }}
+              >
+                {t('requestRestockBtn')}
+              </Button>
+            )}
+          </View>
         </View>
       )}
 

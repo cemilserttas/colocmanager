@@ -23,9 +23,9 @@ interface NotificationPreferencesState {
 const STORAGE_KEY = '@coloc_notification_preferences_v2';
 
 export const useNotificationPreferences = create<NotificationPreferencesState>((set, get) => ({
-  // Default: disabled as required by user prompt
-  notificationsEnabled: false,
-  hasPromptedStartup: false,
+  // Default: enabled so every bell notification triggers mobile push
+  notificationsEnabled: true,
+  hasPromptedStartup: true,
   shoppingReminders: true,
   cleaningReminders: true,
   adminUpdates: true,
@@ -37,7 +37,7 @@ export const useNotificationPreferences = create<NotificationPreferencesState>((
       if (raw) {
         const parsed = JSON.parse(raw);
         set({
-          notificationsEnabled: Boolean(parsed.notificationsEnabled),
+          notificationsEnabled: parsed.notificationsEnabled ?? true,
           hasPromptedStartup: Boolean(parsed.hasPromptedStartup),
           shoppingReminders: parsed.shoppingReminders ?? true,
           cleaningReminders: parsed.cleaningReminders ?? true,

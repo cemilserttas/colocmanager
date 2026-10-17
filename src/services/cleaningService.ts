@@ -300,7 +300,7 @@ export const cleaningService = {
           notificationService.addNotificationToFirestore(
             nextCleanerUid,
             'cleaning_turn',
-            '🧹 C\'est votre tour pour le ménage !',
+            'C\'est votre tour pour le ménage !',
             `Le ménage "${t.name}" (${t.area}) a été validé. C'est maintenant à votre tour !`,
             taskId
           ).catch(() => {});
@@ -345,28 +345,15 @@ export const cleaningService = {
       });
 
       // 🔔 CREATE NOTIFICATIONS IN FIRESTORE
-      // 1. Notify the NEXT person in rotation: It is now their turn!
+      // Notify ONLY the NEXT person in rotation: It is now their turn!
       if (nextCleanerUid && nextCleanerUid !== cleanerUid) {
         notificationService.addNotificationToFirestore(
           nextCleanerUid,
           'cleaning_turn',
-          '🧹 C\'est votre tour pour le ménage !',
+          'C\'est votre tour pour le ménage !',
           `Le ménage "${task.name}" (${task.area}) a été validé. C'est maintenant à votre tour d'ici le ${formattedDueDate} !`,
           taskId
         ).catch((e) => console.warn('Cleaning turn notification error:', e));
-      }
-
-      // 2. Notify all other roommates
-      for (const uid of task.rotationOrder) {
-        if (uid !== cleanerUid && uid !== nextCleanerUid) {
-          notificationService.addNotificationToFirestore(
-            uid,
-            'cleaning',
-            '✨ Ménage validé !',
-            `Le ménage "${task.name}" (${task.area}) a été effectué avec succès.`,
-            taskId
-          ).catch(() => {});
-        }
       }
     } catch {
       const tasks = await mockStorage.getCleaning();

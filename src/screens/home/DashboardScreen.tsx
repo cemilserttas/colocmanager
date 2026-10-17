@@ -76,6 +76,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
     products = [],
     loading: shoppingLoading,
     markAsPurchased,
+    cancelRestock,
     fetchProducts,
   } = useShopping();
   const {
@@ -168,6 +169,32 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
       setActionLoadingId(null);
     }
   };
+
+  const handleCancelRestock = async (productId: string, productName: string) => {
+    setActionLoadingId(productId);
+    soundService.playPopSound();
+    try {
+      await cancelRestock(productId);
+      soundService.playSuccessSound();
+      setSnackbarMessage(
+        t('cancelRestockSuccess', { name: productName }) ||
+          `✓ Demande de rachat annulée pour "${productName}".`
+      );
+      setSnackbarVisible(true);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : isEn
+          ? 'Error cancelling restock request.'
+          : "Erreur lors de l'annulation de la demande.";
+      setSnackbarMessage(message);
+      setSnackbarVisible(true);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
 
   const handleMarkCleaned = async (taskId: string, taskName: string) => {
     setActionLoadingId(taskId);
@@ -519,18 +546,32 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
                           </Text>
                         </View>
                       </View>
-                      <Button
-                        mode="contained"
-                        buttonColor={tokens.success}
-                        textColor="#FFFFFF"
-                        loading={isActionRunning}
-                        disabled={isActionRunning}
-                        onPress={() => handleMarkPurchased(item.id, item.name)}
-                        style={styles.doneButton}
-                        labelStyle={styles.doneButtonLabel}
-                      >
-                        {t('bought')}
-                      </Button>
+                      <View style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                        <Button
+                          mode="contained"
+                          buttonColor={tokens.success}
+                          textColor="#FFFFFF"
+                          loading={isActionRunning}
+                          disabled={isActionRunning}
+                          onPress={() => handleMarkPurchased(item.id, item.name)}
+                          style={styles.doneButton}
+                          labelStyle={styles.doneButtonLabel}
+                        >
+                          {t('bought')}
+                        </Button>
+                        <Button
+                          mode="text"
+                          compact
+                          textColor={tokens.textSecondary}
+                          loading={isActionRunning}
+                          disabled={isActionRunning}
+                          onPress={() => handleCancelRestock(item.id, item.name)}
+                          style={{ margin: 0, padding: 0 }}
+                          labelStyle={{ fontSize: 10.5, fontWeight: '700' }}
+                        >
+                          {t('alreadyInStock') || 'Déjà en stock'}
+                        </Button>
+                      </View>
                     </View>
                   </View>
                 );

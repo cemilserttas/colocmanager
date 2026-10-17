@@ -334,6 +334,19 @@ export const mockStorage = {
     }
   },
 
+  async deleteNotification(notifId: string): Promise<void> {
+    const list = await this.getNotifications();
+    const updated = list.filter((n) => n.id !== notifId && n.notifId !== notifId);
+    await AsyncStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(updated));
+  },
+
+  async clearAllNotifications(userId?: string): Promise<void> {
+    const list = await this.getNotifications();
+    const updated = userId ? list.filter((n) => n.recipientUid !== userId) : [];
+    await AsyncStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(updated));
+  },
+
+
   async clearAll(): Promise<void> {
     for (const key of Object.values(STORAGE_KEYS)) {
       try {
